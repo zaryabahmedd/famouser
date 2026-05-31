@@ -45,11 +45,7 @@
       "reactCompiler": true
     },
     "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "64af2c13-a99f-4418-b73c-9fdc862a10b4"
-      }
-    },
-    "owner": "quicklyride"
+      "router": {}
+    }
   }
 }

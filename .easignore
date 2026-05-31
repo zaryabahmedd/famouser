@@ -1,5 +1,3 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
 # dependencies
 node_modules/
 
@@ -7,7 +5,6 @@ node_modules/
 .expo/
 dist/
 web-build/
-expo-env.d.ts
 
 # Native
 .kotlin/
@@ -31,18 +28,18 @@ yarn-error.*
 *.pem
 
 # local env files
-.env*.local
+.env*
 
-# typescript
-*.tsbuildinfo
-
-example
-
-# generated native folders
-/ios
-/android
-
-# local user and backup files
+# archives
 *.zip
-*.pdf
-/Screenshot*.png
+*.tar
+*.tgz
+*.gz
+*.rar
+
+# unused source design assets
+**/*.pdf
+**/*.psd
+**/*.ai
+assets/images/FAMO-logo-updated (1)/
+Screenshot 2026-05-31 145940.png

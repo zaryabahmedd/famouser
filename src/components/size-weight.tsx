@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomNav } from '@/components/bottom-nav';
+import { useDraftOrder } from '@/hooks/use-draft-order';
 
 const COLORS = {
   surface: '#ffffff',
@@ -51,12 +52,18 @@ const STEP = 0.5;
 export function SizeWeight() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [size, setSize] = useState('m');
-  const [weight, setWeight] = useState(5.5);
+  const { size: draftSize, weight: draftWeight, setPackage } = useDraftOrder();
+  const [size, setSize] = useState(draftSize);
+  const [weight, setWeight] = useState(draftWeight);
   const [instructions, setInstructions] = useState('');
 
   const decrement = () => setWeight((w) => Math.max(MIN_WEIGHT, +(w - STEP).toFixed(1)));
   const increment = () => setWeight((w) => Math.min(MAX_WEIGHT, +(w + STEP).toFixed(1)));
+
+  const handleContinue = () => {
+    setPackage(size, weight);
+    router.push('/pickup-time');
+  };
 
   return (
     <View style={styles.root}>
@@ -169,7 +176,7 @@ export function SizeWeight() {
 
         {/* CTA */}
         <Pressable
-          onPress={() => router.push('/pickup-time')}
+          onPress={handleContinue}
           style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
           accessibilityRole="button">
           <Text style={styles.ctaText}>CONTINUE</Text>

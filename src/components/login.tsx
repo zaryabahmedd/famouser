@@ -3,6 +3,7 @@ import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
+    ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
     Pressable,
@@ -33,7 +34,7 @@ const LOGO_URI =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuA5P3-Ty1oktdSZt17KS9WCWsISnijjmrFzEV2vSkor-TNwXu2TkgJXRV_EarITA6nN0GYjRuNgD8ZhTdXAmXvMVeiR_ZXJ4Qodyo4Ph0qfuwSzXKnFaPBFiLYpvc7KLZAT90Fm1I3tSvmTtOuWwD-QaMtFkB0KGOZZMzQ2X1xmPCpKe5xCrhft-NJUhgCOQNuXZr5MV1ba-4UVttgd6Cd-E5Tbeu_t8fR59s_SWsZI3Xx5ktR1La9glgSeJCNnhhd_-ZcDErqRZZE';
 
 type LoginProps = {
-  onLogin: () => void;
+  onLogin: (email: string, password: string) => Promise<string | null> | void;
   onSignUp?: () => void;
   onForgotPassword?: () => void;
   onBack?: () => void;
@@ -44,6 +45,24 @@ export function Login({ onLogin, onSignUp, onForgotPassword, onBack }: LoginProp
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleLogin = async () => {
+    if (submitting) return;
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) {
+      setError('Please enter your email and password.');
+      return;
+    }
+    setError(null);
+    setSubmitting(true);
+    const result = await onLogin(trimmedEmail, password);
+    if (result) {
+      setError(result);
+      setSubmitting(false);
+    }
+  };
 
   return (
     <View style={styles.root}>
@@ -118,11 +137,22 @@ export function Login({ onLogin, onSignUp, onForgotPassword, onBack }: LoginProp
               <Text style={styles.forgotText}>Forgot password?</Text>
             </Pressable>
 
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
             <Pressable
-              onPress={onLogin}
-              style={({ pressed }) => [styles.primaryBtn, pressed && styles.primaryBtnPressed]}
+              onPress={handleLogin}
+              disabled={submitting}
+              style={({ pressed }) => [
+                styles.primaryBtn,
+                submitting && styles.primaryBtnDisabled,
+                pressed && !submitting && styles.primaryBtnPressed,
+              ]}
               accessibilityRole="button">
-              <Text style={styles.primaryText}>Log in</Text>
+              {submitting ? (
+                <ActivityIndicator color="#000000" />
+              ) : (
+                <Text style={styles.primaryText}>Log in</Text>
+              )}
             </Pressable>
 
             <View style={styles.dividerRow}>
@@ -132,7 +162,6 @@ export function Login({ onLogin, onSignUp, onForgotPassword, onBack }: LoginProp
             </View>
 
             <Pressable
-              onPress={onLogin}
               style={({ pressed }) => [styles.googleBtn, pressed && styles.googleBtnPressed]}
               accessibilityRole="button">
               <GoogleIcon size={20} />
@@ -201,7 +230,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   primaryBtnPressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
+  primaryBtnDisabled: { opacity: 0.6 },
   primaryText: { fontSize: 16, fontWeight: '700', color: COLORS.onPrimaryContainer },
+  errorText: { fontSize: 13, lineHeight: 18, color: '#b3261e' },
   dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   divider: { flex: 1, height: 1, backgroundColor: COLORS.outlineVariant },
   dividerText: { fontSize: 14, color: COLORS.outline },

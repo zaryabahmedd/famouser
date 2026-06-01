@@ -1,6 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import {
     Alert,
@@ -13,6 +13,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
+
+import { useDeliveryStatus } from '@/hooks/use-delivery-status';
+import { useRiderTracking } from '@/hooks/use-rider-tracking';
 
 const COLORS = {
   surface: '#ffffff',
@@ -35,9 +38,26 @@ const AVATAR_URI = 'https://randomuser.me/api/portraits/men/75.jpg';
 
 const TAGS = ['Electronics', 'M · 5.5kg', 'Rs 566'];
 
+const STATUS_LABEL: Record<string, string> = {
+  searching: 'Finding rider',
+  accepted: 'Rider on the way',
+  picked_up: 'In transit',
+  delivered: 'Delivered',
+  cancelled: 'Cancelled',
+};
+
 export function LiveTracking() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const params = useLocalSearchParams<{ deliveryId?: string; riderId?: string }>();
+  const deliveryId = typeof params.deliveryId === 'string' ? params.deliveryId : null;
+  const paramRiderId =
+    typeof params.riderId === 'string' && params.riderId ? params.riderId : null;
+  const { delivery } = useDeliveryStatus(deliveryId);
+  const { position, live } = useRiderTracking(
+    deliveryId,
+    paramRiderId ?? delivery?.rider_id ?? null,
+  );
 
   return (
     <View style={styles.root}>
@@ -86,8 +106,14 @@ export function LiveTracking() {
           style={styles.statusPill}
           accessibilityRole="button"
           accessibilityLabel="Delivery status">
-          <Text style={styles.statusTitle}>In transit</Text>
-          <Text style={styles.statusSub}>ETA 14 min</Text>
+          <Text style={styles.statusTitle}>
+            {delivery ? STATUS_LABEL[delivery.status] ?? 'In transit' : 'In transit'}
+          </Text>
+          <Text style={styles.statusSub}>
+            {position
+              ? `${live ? 'Live' : 'Last'} · ${position.lat.toFixed(4)}, ${position.lng.toFixed(4)}`
+              : 'Locating rider…'}
+          </Text>
         </Pressable>
         <Pressable
           onPress={() =>

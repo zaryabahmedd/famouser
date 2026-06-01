@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
+    ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
     Pressable,
@@ -13,6 +14,10 @@ import {
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { useDraftOrder } from '@/hooks/use-draft-order';
+import { usePlaceSearch } from '@/hooks/use-place-search';
+import { autocompletePlaces, getPlaceDetails, newPlacesSession } from '@/lib/geo';
 
 const COLORS = {
   surface: '#ffffff',
@@ -47,13 +52,82 @@ const SAVED: SavedPlace[] = [
 export function PickupAddress() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [address, setAddress] = useState('House 21, Street 4, DHA Phase 5, Lahore');
+  const { setPickup, updatePickup } = useDraftOrder();
+  const search = usePlaceSearch();
+  const [picked, setPicked] = useState(false);
   const [detail, setDetail] = useState('');
   const [name, setName] = useState('Ahmed Khan');
   const [phone, setPhone] = useState('+92 300 1234567');
   const [notes, setNotes] = useState('');
 
-  const canContinue = address.trim().length > 0 && name.trim().length > 0 && phone.trim().length > 0;
+  const canContinue =
+    (picked || search.query.trim().length > 1) &&
+    name.trim().length > 0 &&
+    phone.trim().length > 0;
+
+  const handleSavedSelect = (address: string) => {
+    search.setQuery(address);
+    setPicked(true);
+    // Set Lahore center coordinates as initial fallback
+    setPickup({
+      address,
+      lat: 31.5204,
+      lng: 74.3587,
+    });
+    // Dynamically look up full coordinates in the background
+    autocompletePlaces(address, newPlacesSession())
+      .then((results: any[]) => {
+        if (results.length > 0) {
+          getPlaceDetails(results[0].place_id, newPlacesSession())
+            .then((place: any) => {
+              if (place) {
+                setPickup(place);
+              }
+            })
+            .catch(() => {});
+        }
+      })
+      .catch(() => {});
+  };
+
+  const handleSelect = async (placeId: string, description: string) => {
+    const place = await search.select({
+      place_id: placeId,
+      description,
+      main_text: description,
+      secondary_text: '',
+    });
+    if (place) {
+      setPickup(place);
+      setPicked(true);
+    }
+  };
+
+  const handleContinue = async () => {
+    if (!picked && search.query.trim().length > 0) {
+      // Set Lahore center coordinates as initial fallback
+      setPickup({
+        address: search.query,
+        lat: 31.5204,
+        lng: 74.3587,
+      });
+
+      try {
+        const results = await autocompletePlaces(search.query, newPlacesSession());
+        if (results.length > 0) {
+          const place = await getPlaceDetails(results[0].place_id, newPlacesSession());
+          if (place) {
+            setPickup(place);
+          }
+        }
+      } catch (err) {
+        console.warn('Geocoding fallback failed:', err);
+      }
+    }
+
+    updatePickup({ detail, contactName: name, contactPhone: phone, notes });
+    router.push('/dropoff-address');
+  };
 
   return (
     <KeyboardAvoidingView
@@ -113,7 +187,7 @@ export function PickupAddress() {
           {SAVED.map((place) => (
             <Pressable
               key={place.key}
-              onPress={() => setAddress(place.address)}
+              onPress={() => handleSavedSelect(place.address)}
               style={({ pressed }) => [styles.savedChip, pressed && styles.savedChipPressed]}
               accessibilityRole="button">
               <MaterialIcons name={place.icon} size={18} color={COLORS.primary} />
@@ -127,14 +201,41 @@ export function PickupAddress() {
         <View style={styles.field}>
           <MaterialIcons name="place" size={20} color={COLORS.pickup} />
           <TextInput
-            value={address}
-            onChangeText={setAddress}
+            value={search.query}
+            onChangeText={search.onChangeText}
             placeholder="Search or enter address"
             placeholderTextColor={COLORS.outline}
             style={styles.input}
             multiline
           />
+          {search.loading ? <ActivityIndicator size="small" color={COLORS.primary} /> : null}
         </View>
+        {search.unavailable ? (
+          <Text style={styles.hint}>Address search is temporarily unavailable.</Text>
+        ) : null}
+        {search.predictions.length > 0 ? (
+          <View style={styles.suggestions}>
+            {search.predictions.map((p) => (
+              <Pressable
+                key={p.place_id}
+                onPress={() => handleSelect(p.place_id, p.description)}
+                style={({ pressed }) => [styles.suggestion, pressed && styles.suggestionPressed]}
+                accessibilityRole="button">
+                <MaterialIcons name="place" size={18} color={COLORS.outline} />
+                <View style={styles.suggestionText}>
+                  <Text style={styles.suggestionMain} numberOfLines={1}>
+                    {p.main_text || p.description}
+                  </Text>
+                  {p.secondary_text ? (
+                    <Text style={styles.suggestionSecondary} numberOfLines={1}>
+                      {p.secondary_text}
+                    </Text>
+                  ) : null}
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
         <View style={styles.field}>
           <MaterialIcons name="apartment" size={20} color={COLORS.outline} />
           <TextInput
@@ -186,7 +287,7 @@ export function PickupAddress() {
         {/* Continue */}
         <Pressable
           disabled={!canContinue}
-          onPress={() => router.push('/dropoff-address')}
+          onPress={handleContinue}
           style={({ pressed }) => [
             styles.next,
             !canContinue && styles.nextDisabled,
@@ -361,6 +462,45 @@ const styles = StyleSheet.create({
   fieldNote: {
     alignItems: 'flex-start',
     minHeight: 88,
+  },
+  hint: {
+    fontSize: 13,
+    color: COLORS.outline,
+    paddingHorizontal: 4,
+    marginBottom: 12,
+  },
+  suggestions: {
+    borderRadius: 14,
+    backgroundColor: COLORS.surfaceLowest,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  suggestion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.outlineVariant,
+  },
+  suggestionPressed: {
+    backgroundColor: COLORS.surfaceContainerLow,
+  },
+  suggestionText: {
+    flex: 1,
+  },
+  suggestionMain: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.onSurface,
+  },
+  suggestionSecondary: {
+    fontSize: 13,
+    color: COLORS.onSurfaceVariant,
+    marginTop: 2,
   },
   input: {
     flex: 1,

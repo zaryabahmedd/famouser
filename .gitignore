@@ -31,6 +31,7 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
 
 # typescript
@@ -45,4 +46,5 @@ example
 # local user and backup files
 *.zip
 *.pdf
+*.apk
 /Screenshot*.png

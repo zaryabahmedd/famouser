@@ -1,6 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import {
     Platform,
@@ -33,6 +33,7 @@ const STAR_COLOR = '#FFD700';
 export function RiderAssigned() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const params = useLocalSearchParams<{ deliveryId?: string; riderId?: string }>();
 
   return (
     <View style={styles.root}>
@@ -112,7 +113,7 @@ export function RiderAssigned() {
 
         {/* View on map */}
         <Pressable
-          onPress={() => router.push('/live-tracking')}
+          onPress={() => router.push({ pathname: '/live-tracking', params })}
           style={({ pressed }) => [styles.mapBtn, pressed && styles.mapBtnPressed]}
           accessibilityRole="button">
           <MaterialIcons name="map" size={22} color={COLORS.onSurface} />

@@ -128,6 +128,19 @@ export function UserProfile() {
               <MaterialIcons name="chevron-right" size={24} color={COLORS.onSurfaceVariant} />
             </Pressable>
           ))}
+
+          <Pressable
+            onPress={() => router.push('/delete-account')}
+            style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+            accessibilityRole="button">
+            <View style={styles.menuLeft}>
+              <View style={[styles.menuIcon, styles.menuIconDanger]}>
+                <MaterialIcons name="delete-outline" size={22} color={COLORS.error} />
+              </View>
+              <Text style={[styles.menuLabel, styles.menuLabelDanger]}>Delete Account</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color={COLORS.error} />
+          </Pressable>
         </View>
 
         {/* Logout */}
@@ -270,10 +283,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  menuIconDanger: {
+    backgroundColor: '#ffdad6',
+  },
   menuLabel: {
     fontSize: 16,
     fontWeight: '600',
     color: COLORS.onSurface,
+  },
+  menuLabelDanger: {
+    color: COLORS.error,
   },
   footer: {
     marginTop: 32,

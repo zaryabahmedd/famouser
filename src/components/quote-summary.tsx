@@ -2,8 +2,9 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
+    ActivityIndicator,
     Platform,
     Pressable,
     ScrollView,
@@ -13,6 +14,10 @@ import {
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { useCreateDelivery } from '@/hooks/use-create-delivery';
+import { useDraftOrder } from '@/hooks/use-draft-order';
+import { estimateFare, FARE, getRoute, haversineMeters } from '@/lib/geo';
 
 const COLORS = {
   surface: '#ffffff',
@@ -40,18 +45,81 @@ type FareRow = {
   negative?: boolean;
 };
 
-const FARE_ROWS: FareRow[] = [
-  { label: 'Base fare', value: 'Rs 150' },
-  { label: 'Distance (12.4 km × 35)', value: 'Rs 434' },
-  { label: 'Handling (Electronics)', value: 'Rs 50' },
-  { label: 'Taxes', value: 'Rs 32' },
-  { label: 'Promo WELCOME20', value: '- Rs 100', negative: true },
-];
-
 export function QuoteSummary() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [promo, setPromo] = useState('');
+  const { createDelivery, submitting, error } = useCreateDelivery();
+  const { pickup, dropoff, size, weight } = useDraftOrder();
+
+  const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
+  const [calculating, setCalculating] = useState(true);
+
+  const hasRoute = !!pickup && !!dropoff;
+
+  // Resolve the real driving distance once both endpoints are known. Falls back
+  // to a straight-line estimate if the directions service is unavailable.
+  useEffect(() => {
+    let cancelled = false;
+    if (!pickup || !dropoff) {
+      setCalculating(false);
+      return;
+    }
+    setCalculating(true);
+    (async () => {
+      let meters: number;
+      try {
+        const route = await getRoute(
+          { lat: pickup.lat, lng: pickup.lng },
+          { lat: dropoff.lat, lng: dropoff.lng },
+        );
+        meters = route.distance_meters;
+      } catch {
+        meters = haversineMeters(pickup, dropoff);
+      }
+      if (!cancelled) {
+        setDistanceMeters(meters);
+        setCalculating(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pickup, dropoff]);
+
+  const km = distanceMeters != null ? distanceMeters / 1000 : null;
+  const price = distanceMeters != null ? estimateFare(distanceMeters, weight) : null;
+
+  const fareRows = useMemo<FareRow[]>(() => {
+    if (km == null) return [];
+    return [
+      { label: 'Base fare', value: `Rs ${FARE.base}` },
+      {
+        label: `Distance (${km.toFixed(1)} km × ${FARE.perKm})`,
+        value: `Rs ${Math.round(km * FARE.perKm)}`,
+      },
+      { label: `Weight (${weight} kg × ${FARE.perKg})`, value: `Rs ${Math.round(weight * FARE.perKg)}` },
+    ];
+  }, [km, weight]);
+
+  const priceLabel = price != null ? `Rs ${price}` : '—';
+
+  const handleConfirm = async () => {
+    if (submitting || !pickup || !dropoff || price == null) return;
+    const delivery = await createDelivery({
+      pickup_address: pickup.address,
+      pickup_lat: pickup.lat,
+      pickup_lng: pickup.lng,
+      dropoff_address: dropoff.address,
+      dropoff_lat: dropoff.lat,
+      dropoff_lng: dropoff.lng,
+      weight,
+      price,
+    });
+    if (delivery) {
+      router.push({ pathname: '/finding-rider', params: { deliveryId: delivery.id } });
+    }
+  };
 
   return (
     <View style={styles.root}>
@@ -86,38 +154,58 @@ export function QuoteSummary() {
         {/* Detail chips */}
         <View style={styles.chips}>
           <View style={styles.chip}>
-            <MaterialIcons name="devices" size={18} color={COLORS.primary} />
-            <Text style={styles.chipText}>Electronics</Text>
+            <MaterialIcons name="inventory-2" size={18} color={COLORS.primary} />
+            <Text style={styles.chipText}>Package</Text>
           </View>
           <View style={styles.chip}>
-            <Text style={styles.chipText}>M • 5.5kg</Text>
+            <Text style={styles.chipText}>{size.toUpperCase()} • {weight}kg</Text>
           </View>
           <View style={styles.chip}>
-            <Text style={styles.chipText}>12.4 km</Text>
+            <Text style={styles.chipText}>{km != null ? `${km.toFixed(1)} km` : '—'}</Text>
           </View>
         </View>
 
         {/* Fare breakdown */}
-        <View style={styles.fareCard}>
-          <View style={styles.fareAccent} />
-          <Text style={styles.fareHeading}>FARE BREAKDOWN</Text>
-          <View style={styles.fareRows}>
-            {FARE_ROWS.map((row) => (
-              <View key={row.label} style={styles.fareRow}>
-                <Text style={[styles.fareLabel, row.negative && styles.fareNegative]}>
-                  {row.label}
-                </Text>
-                <Text style={[styles.fareValue, row.negative && styles.fareNegative]}>
-                  {row.value}
-                </Text>
-              </View>
-            ))}
+        {!hasRoute ? (
+          <View style={styles.fareCard}>
+            <View style={styles.fareAccent} />
+            <Text style={styles.fareHeading}>FARE BREAKDOWN</Text>
+            <Text style={styles.fareMissing}>
+              Pickup and drop-off addresses are required to calculate your fare. Go back and pick
+              both from the address search.
+            </Text>
           </View>
-          <View style={styles.fareTotalRow}>
-            <Text style={styles.fareTotalLabel}>Total</Text>
-            <Text style={styles.fareTotalValue}>Rs 566</Text>
+        ) : calculating ? (
+          <View style={styles.fareCard}>
+            <View style={styles.fareAccent} />
+            <Text style={styles.fareHeading}>FARE BREAKDOWN</Text>
+            <View style={styles.fareCalculating}>
+              <ActivityIndicator size="small" color={COLORS.primary} />
+              <Text style={styles.fareMissing}>Calculating distance…</Text>
+            </View>
           </View>
-        </View>
+        ) : (
+          <View style={styles.fareCard}>
+            <View style={styles.fareAccent} />
+            <Text style={styles.fareHeading}>FARE BREAKDOWN</Text>
+            <View style={styles.fareRows}>
+              {fareRows.map((row) => (
+                <View key={row.label} style={styles.fareRow}>
+                  <Text style={[styles.fareLabel, row.negative && styles.fareNegative]}>
+                    {row.label}
+                  </Text>
+                  <Text style={[styles.fareValue, row.negative && styles.fareNegative]}>
+                    {row.value}
+                  </Text>
+                </View>
+              ))}
+            </View>
+            <View style={styles.fareTotalRow}>
+              <Text style={styles.fareTotalLabel}>Total</Text>
+              <Text style={styles.fareTotalValue}>{priceLabel}</Text>
+            </View>
+          </View>
+        )}
 
         {/* Promo input */}
         <View style={styles.promoRow}>
@@ -151,11 +239,20 @@ export function QuoteSummary() {
         </Pressable>
 
         {/* Bottom action */}
+        {error ? (
+          <Text style={{ color: COLORS.error, textAlign: 'center', marginBottom: 8 }}>{error}</Text>
+        ) : null}
         <Pressable
-          onPress={() => router.push('/finding-rider')}
-          style={({ pressed }) => [styles.confirm, pressed && styles.pressed]}
+          onPress={handleConfirm}
+          disabled={submitting || price == null}
+          style={({ pressed }) => [
+            styles.confirm,
+            (pressed || submitting || price == null) && styles.pressed,
+          ]}
           accessibilityRole="button">
-          <Text style={styles.confirmText}>Confirm & Pay · Rs 566</Text>
+          <Text style={styles.confirmText}>
+            {submitting ? 'Creating request…' : `Confirm & Pay · ${priceLabel}`}
+          </Text>
         </Pressable>
       </ScrollView>
     </View>
@@ -277,6 +374,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 1.5,
     color: COLORS.onSurfaceVariant,
+  },
+  fareMissing: {
+    fontSize: 14,
+    color: COLORS.onSurfaceVariant,
+    marginTop: 12,
+    lineHeight: 20,
+  },
+  fareCalculating: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 12,
   },
   fareRows: {
     gap: 12,

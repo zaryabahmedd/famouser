@@ -1,6 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef } from 'react';
 import {
@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomNav } from '@/components/bottom-nav';
+import { useDeliveryStatus } from '@/hooks/use-delivery-status';
 
 const COLORS = {
   surface: '#ffffff',
@@ -90,11 +91,28 @@ function PingDot() {
 export function FindingRider() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const params = useLocalSearchParams<{ deliveryId?: string }>();
+  const deliveryId = typeof params.deliveryId === 'string' ? params.deliveryId : null;
+  const { delivery } = useDeliveryStatus(deliveryId);
 
   useEffect(() => {
+    // Preview fallback: without a real delivery id, simulate assignment.
+    if (deliveryId) return;
     const timer = setTimeout(() => router.replace('/rider-assigned'), 4000);
     return () => clearTimeout(timer);
-  }, [router]);
+  }, [deliveryId, router]);
+
+  useEffect(() => {
+    if (!delivery) return;
+    if (delivery.status === 'accepted' || delivery.status === 'picked_up') {
+      router.replace({
+        pathname: '/rider-assigned',
+        params: { deliveryId: delivery.id, riderId: delivery.rider_id ?? '' },
+      });
+    } else if (delivery.status === 'cancelled') {
+      router.back();
+    }
+  }, [delivery, router]);
 
   return (
     <View style={styles.root}>

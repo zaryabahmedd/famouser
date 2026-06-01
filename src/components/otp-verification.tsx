@@ -3,6 +3,7 @@ import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import {
+    ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
     Pressable,
@@ -25,20 +26,23 @@ const COLORS = {
   primaryContainer: '#fbd103',
 };
 
-const OTP_LENGTH = 4;
+const OTP_LENGTH = 6;
 const RESEND_SECONDS = 30;
 
 type OtpVerificationProps = {
-  onVerify: () => void;
+  onVerify: (code: string) => Promise<string | null> | void;
+  onResend?: () => Promise<string | null> | void;
   onBack?: () => void;
   destination?: string;
 };
 
-export function OtpVerification({ onVerify, onBack, destination }: OtpVerificationProps) {
+export function OtpVerification({ onVerify, onResend, onBack, destination }: OtpVerificationProps) {
   const insets = useSafeAreaInsets();
   const inputs = useRef<(TextInput | null)[]>([]);
   const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [seconds, setSeconds] = useState(RESEND_SECONDS);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (seconds <= 0) return;
@@ -65,6 +69,29 @@ export function OtpVerification({ onVerify, onBack, destination }: OtpVerificati
   };
 
   const isComplete = digits.every((d) => d !== '');
+
+  const handleVerify = async () => {
+    if (submitting || !isComplete) return;
+    setError(null);
+    setSubmitting(true);
+    const result = await onVerify(digits.join(''));
+    if (result) {
+      setError(result);
+      setSubmitting(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (seconds > 0) return;
+    setError(null);
+    const result = onResend ? await onResend() : null;
+    if (result) {
+      setError(result);
+    } else {
+      setSeconds(RESEND_SECONDS);
+      setDigits(Array(OTP_LENGTH).fill(''));
+    }
+  };
 
   return (
     <View style={styles.root}>
@@ -104,10 +131,10 @@ export function OtpVerification({ onVerify, onBack, destination }: OtpVerificati
           </View>
 
           <View style={styles.heading}>
-            <Text style={styles.title}>Verify Your Number</Text>
+            <Text style={styles.title}>Verify Your Email</Text>
             <Text style={styles.subtitle}>
               Enter the {OTP_LENGTH}-digit code we sent to{' '}
-              <Text style={styles.dest}>{destination ?? 'your phone'}</Text>.
+              <Text style={styles.dest}>{destination ?? 'your email'}</Text>.
             </Text>
           </View>
 
@@ -129,17 +156,25 @@ export function OtpVerification({ onVerify, onBack, destination }: OtpVerificati
             ))}
           </View>
 
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
           <Pressable
-            onPress={onVerify}
-            disabled={!isComplete}
+            onPress={handleVerify}
+            disabled={!isComplete || submitting}
             style={({ pressed }) => [
               styles.cta,
-              !isComplete && styles.ctaDisabled,
-              pressed && isComplete && styles.ctaPressed,
+              (!isComplete || submitting) && styles.ctaDisabled,
+              pressed && isComplete && !submitting && styles.ctaPressed,
             ]}
             accessibilityRole="button">
-            <Text style={styles.ctaText}>Verify</Text>
-            <MaterialIcons name="check" size={20} color="#000000" />
+            {submitting ? (
+              <ActivityIndicator color="#000000" />
+            ) : (
+              <>
+                <Text style={styles.ctaText}>Verify</Text>
+                <MaterialIcons name="check" size={20} color="#000000" />
+              </>
+            )}
           </Pressable>
 
           <View style={styles.resendRow}>
@@ -149,7 +184,7 @@ export function OtpVerification({ onVerify, onBack, destination }: OtpVerificati
               </Text>
             ) : (
               <Pressable
-                onPress={() => setSeconds(RESEND_SECONDS)}
+                onPress={handleResend}
                 accessibilityRole="button">
                 <Text style={styles.resendLink}>Resend code</Text>
               </Pressable>
@@ -250,20 +285,27 @@ const styles = StyleSheet.create({
   otpRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 12,
-    marginBottom: 28,
+    gap: 8,
+    marginBottom: 20,
   },
   otpInput: {
-    width: 60,
-    height: 68,
-    borderRadius: 14,
+    width: 46,
+    height: 60,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.outlineVariant,
     backgroundColor: COLORS.surfaceLowest,
     textAlign: 'center',
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '700',
     color: COLORS.onSurface,
+  },
+  errorText: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#b3261e',
+    textAlign: 'center',
+    marginBottom: 16,
   },
   otpInputFilled: {
     borderColor: COLORS.primary,

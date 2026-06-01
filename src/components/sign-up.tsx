@@ -3,6 +3,7 @@ import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
+    ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
     Pressable,
@@ -63,17 +64,60 @@ const FIELDS: Field[] = [
   },
 ];
 
+export type SignUpValues = {
+  name: string;
+  email: string;
+  phone: string;
+  password: string;
+};
+
 type SignUpProps = {
-  onContinue: () => void;
+  onContinue: (values: SignUpValues) => Promise<string | null> | void;
   onBack?: () => void;
   onLogIn?: () => void;
 };
 
 export function SignUp({ onContinue, onBack, onLogIn }: SignUpProps) {
   const insets = useSafeAreaInsets();
-  const [values, setValues] = useState({ name: '', email: '', phone: '' });
+  const [values, setValues] = useState({ name: '', email: '', phone: '', password: '' });
   const [agreed, setAgreed] = useState(false);
   const [focused, setFocused] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleContinue = async () => {
+    if (submitting) return;
+    const name = values.name.trim();
+    const email = values.email.trim();
+    const phone = values.phone.trim();
+    const { password } = values;
+
+    if (!name || !email || !phone || !password) {
+      setError('Please fill in all fields.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+    if (!agreed) {
+      setError('Please agree to the Terms and Privacy Policy.');
+      return;
+    }
+
+    setError(null);
+    setSubmitting(true);
+    const result = await onContinue({ name, email, phone, password });
+    if (result) {
+      setError(result);
+      setSubmitting(false);
+    }
+  };
 
   return (
     <View style={styles.root}>
@@ -156,6 +200,45 @@ export function SignUp({ onContinue, onBack, onLogIn }: SignUpProps) {
               </View>
             ))}
 
+            {/* Password */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Password</Text>
+              <View
+                style={[
+                  styles.inputWrap,
+                  focused === 'password' && styles.inputWrapFocused,
+                ]}>
+                <MaterialIcons
+                  name="lock"
+                  size={20}
+                  color={focused === 'password' ? COLORS.onSurface : COLORS.onSurfaceVariant}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  value={values.password}
+                  onChangeText={(text) => setValues((prev) => ({ ...prev, password: text }))}
+                  onFocus={() => setFocused('password')}
+                  onBlur={() => setFocused(null)}
+                  placeholder="Create a password"
+                  placeholderTextColor={COLORS.outline}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  style={styles.input}
+                />
+                <Pressable
+                  onPress={() => setShowPassword((v) => !v)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}>
+                  <MaterialIcons
+                    name={showPassword ? 'visibility-off' : 'visibility'}
+                    size={20}
+                    color={COLORS.onSurfaceVariant}
+                  />
+                </Pressable>
+              </View>
+            </View>
+
             {/* Terms */}
             <Pressable
               style={styles.terms}
@@ -171,13 +254,26 @@ export function SignUp({ onContinue, onBack, onLogIn }: SignUpProps) {
               </Text>
             </Pressable>
 
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
             {/* Primary CTA */}
             <Pressable
-              onPress={onContinue}
-              style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
+              onPress={handleContinue}
+              disabled={submitting}
+              style={({ pressed }) => [
+                styles.cta,
+                submitting && styles.ctaDisabled,
+                pressed && !submitting && styles.ctaPressed,
+              ]}
               accessibilityRole="button">
-              <Text style={styles.ctaText}>Continue</Text>
-              <MaterialIcons name="arrow-forward" size={20} color="#000000" />
+              {submitting ? (
+                <ActivityIndicator color="#000000" />
+              ) : (
+                <>
+                  <Text style={styles.ctaText}>Continue</Text>
+                  <MaterialIcons name="arrow-forward" size={20} color="#000000" />
+                </>
+              )}
             </Pressable>
           </View>
 
@@ -373,7 +469,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#000000',
   },
-  footer: {
+  ctaDisabled: {
+    opacity: 0.6,
+  },
+  errorText: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#b3261e',
+    marginTop: 2,
+  },  footer: {
     alignItems: 'center',
     gap: 14,
     marginTop: 18,

@@ -38,7 +38,7 @@ type SummaryRow = {
 const SUMMARY: SummaryRow[] = [
   { label: 'Content', value: 'Electronics' },
   { label: 'Weight', value: '5.5kg' },
-  { label: 'Total Paid', value: 'Rs 566', total: true },
+  { label: 'Total Paid', value: '₦566', total: true },
 ];
 
 export function DeliverySuccess() {

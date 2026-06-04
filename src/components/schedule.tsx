@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomNav } from '@/components/bottom-nav';
+import { useDraftOrder } from '@/hooks/use-draft-order';
 
 const AVATAR_URI = 'https://randomuser.me/api/portraits/men/32.jpg';
 
@@ -49,10 +50,16 @@ const CATEGORIES: Category[] = [
 export function Schedule() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [selected, setSelected] = useState<string>('fragile');
-  const [otherText, setOtherText] = useState('');
+  const { category, categoryDescription, setCategory } = useDraftOrder();
+  const [selected, setSelected] = useState<string>(category || 'fragile');
+  const [otherText, setOtherText] = useState(categoryDescription);
 
   const isOther = selected === 'other';
+
+  const handleNext = () => {
+    setCategory(selected, isOther ? otherText.trim() : '');
+    router.push('/pickup-address');
+  };
 
   return (
     <View style={styles.root}>
@@ -159,7 +166,7 @@ export function Schedule() {
 
         {/* Bottom action */}
         <Pressable
-          onPress={() => router.push('/pickup-address')}
+          onPress={handleNext}
           style={({ pressed }) => [styles.next, pressed && styles.nextPressed]}
           accessibilityRole="button">
           <Text style={styles.nextText}>Next</Text>

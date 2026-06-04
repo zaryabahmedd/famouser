@@ -1,8 +1,10 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
+    ActivityIndicator,
+    Alert,
     Platform,
     Pressable,
     ScrollView,
@@ -12,6 +14,8 @@ import {
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { supabase } from '@/lib/supabase';
 
 const COLORS = {
   surface: '#ffffff',
@@ -44,8 +48,45 @@ const REASONS = [
 export function CancelDelivery() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const params = useLocalSearchParams<{ deliveryId?: string }>();
+  const deliveryId = typeof params.deliveryId === 'string' && params.deliveryId ? params.deliveryId : null;
   const [selected, setSelected] = useState<string | null>(null);
   const [note, setNote] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleCancel = async () => {
+    if (submitting) return;
+
+    // Without a delivery id there is nothing to cancel server-side (e.g. preview
+    // mode); just return the user home.
+    if (!deliveryId) {
+      router.dismissTo('/');
+      return;
+    }
+
+    setSubmitting(true);
+    const { error } = await supabase.rpc('user_cancel_delivery', {
+      p_delivery_id: deliveryId,
+    });
+    setSubmitting(false);
+
+    if (error) {
+      const message =
+        error.message?.includes('cannot_cancel_picked_up')
+          ? 'Your package has already been picked up and can no longer be cancelled.'
+          : error.message?.includes('cannot_cancel_delivered')
+            ? 'This delivery is already complete.'
+            : error.message?.includes('cannot_cancel_cancelled')
+              ? 'This delivery was already cancelled.'
+              : 'We could not cancel your delivery. Please try again.';
+      Alert.alert('Unable to cancel', message);
+      return;
+    }
+
+    // Cancellation confirmed: the backend has ended the session and freed the
+    // rider. Return the user to the home screen.
+    router.dismissTo('/');
+  };
 
   return (
     <View style={styles.root}>
@@ -120,17 +161,21 @@ export function CancelDelivery() {
           <Text style={styles.keepText}>Keep delivery</Text>
         </Pressable>
         <Pressable
-          disabled={!selected}
-          onPress={() => router.dismissTo('/')}
+          disabled={!selected || submitting}
+          onPress={handleCancel}
           style={({ pressed }) => [
             styles.confirm,
-            !selected && styles.confirmDisabled,
-            pressed && selected && styles.confirmPressed,
+            (!selected || submitting) && styles.confirmDisabled,
+            pressed && selected && !submitting && styles.confirmPressed,
           ]}
           accessibilityRole="button">
-          <Text style={[styles.confirmText, !selected && styles.confirmTextDisabled]}>
-            Cancel delivery
-          </Text>
+          {submitting ? (
+            <ActivityIndicator color={COLORS.error} />
+          ) : (
+            <Text style={[styles.confirmText, !selected && styles.confirmTextDisabled]}>
+              Cancel delivery
+            </Text>
+          )}
         </Pressable>
       </View>
     </View>

@@ -4,14 +4,19 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
+    ActivityIndicator,
     Platform,
     Pressable,
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { usePlaceSearch } from '@/hooks/use-place-search';
+import { FARE, getRoute, haversineMeters, type PlaceLocation, type PlacePrediction } from '@/lib/geo';
 
 const COLORS = {
   surface: '#ffffff',
@@ -28,19 +33,6 @@ const COLORS = {
   onPrimaryContainer: '#726300',
 };
 
-type Category = {
-  key: string;
-  icon: keyof typeof MaterialIcons.glyphMap;
-  label: string;
-};
-
-const CATEGORIES: Category[] = [
-  { key: 'document', icon: 'description', label: 'Document' },
-  { key: 'electronics', icon: 'devices', label: 'Electronics' },
-  { key: 'fragile', icon: 'egg-alt', label: 'Fragile' },
-  { key: 'food', icon: 'lunch-dining', label: 'Food' },
-];
-
 type Size = {
   key: string;
   icon: keyof typeof MaterialIcons.glyphMap;
@@ -55,11 +47,77 @@ const SIZES: Size[] = [
   { key: 'XL', icon: 'widgets',   label: 'Extra Large', desc: 'Bulk / bulky'   },
 ];
 
+function formatPrice(value: number): string {
+  return Math.round(value).toLocaleString('en-NG');
+}
+
 export function InstantQuote() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [category, setCategory] = useState('electronics');
   const [size, setSize] = useState('M');
+
+  // Real Google Places autocomplete for the two location fields.
+  const pickupSearch = usePlaceSearch();
+  const dropoffSearch = usePlaceSearch();
+  const [pickupLoc, setPickupLoc] = useState<PlaceLocation | null>(null);
+  const [dropoffLoc, setDropoffLoc] = useState<PlaceLocation | null>(null);
+
+  // Resolved route + fare estimate (₦180 per km).
+  const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
+  const [durationSeconds, setDurationSeconds] = useState<number | null>(null);
+  const [routeLoading, setRouteLoading] = useState(false);
+  // Only reveal the estimate after the user taps "Get estimated price".
+  const [showEstimate, setShowEstimate] = useState(false);
+
+  const handlePickupSelect = async (prediction: PlacePrediction) => {
+    const place = await pickupSearch.select(prediction);
+    if (place) {
+      setPickupLoc(place);
+      setShowEstimate(false);
+    }
+  };
+
+  const handleDropoffSelect = async (prediction: PlacePrediction) => {
+    const place = await dropoffSearch.select(prediction);
+    if (place) {
+      setDropoffLoc(place);
+      setShowEstimate(false);
+    }
+  };
+
+  const canEstimate = pickupLoc != null && dropoffLoc != null;
+
+  // Fetch the driving route to derive the distance (falling back to a
+  // straight-line distance if the route service is offline), then reveal the
+  // estimate card. Triggered by the "Get estimated price" button.
+  const handleEstimate = () => {
+    if (!pickupLoc || !dropoffLoc) return;
+    setShowEstimate(true);
+    setRouteLoading(true);
+    getRoute(
+      { lat: pickupLoc.lat, lng: pickupLoc.lng },
+      { lat: dropoffLoc.lat, lng: dropoffLoc.lng },
+    )
+      .then((route) => {
+        setDistanceMeters(route.distance_meters);
+        setDurationSeconds(route.duration_seconds);
+      })
+      .catch(() => {
+        const meters = haversineMeters(
+          { lat: pickupLoc.lat, lng: pickupLoc.lng },
+          { lat: dropoffLoc.lat, lng: dropoffLoc.lng },
+        );
+        setDistanceMeters(meters);
+        setDurationSeconds(null);
+      })
+      .finally(() => {
+        setRouteLoading(false);
+      });
+  };
+
+  const km = distanceMeters != null ? distanceMeters / 1000 : null;
+  // Estimated total billed at a flat ₦180 per kilometre.
+  const total = km != null ? Math.round(km * FARE.perKm) : null;
 
   return (
     <View style={styles.root}>
@@ -88,50 +146,77 @@ export function InstantQuote() {
 
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
-        showsVerticalScrollIndicator={false}>
-        {/* Pickup / Drop-off */}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled">
+        {/* Pickup */}
         <View style={styles.field}>
           <Text style={styles.fieldLabel}>PICKUP</Text>
           <View style={styles.input}>
             <MaterialIcons name="location-on" size={20} color={COLORS.outline} />
-            <Text style={styles.inputValue}>Victoria Island, Lagos</Text>
+            <TextInput
+              value={pickupSearch.query}
+              onChangeText={pickupSearch.onChangeText}
+              placeholder="Search pickup location"
+              placeholderTextColor={COLORS.outline}
+              style={styles.inputValue}
+            />
+            {pickupSearch.loading && <ActivityIndicator size="small" color={COLORS.primary} />}
           </View>
+          {pickupSearch.predictions.length > 0 && (
+            <View style={styles.suggestions}>
+              {pickupSearch.predictions.map((p) => (
+                <Pressable
+                  key={p.place_id}
+                  onPress={() => handlePickupSelect(p)}
+                  style={({ pressed }) => [styles.suggestionRow, pressed && styles.suggestionPressed]}
+                  accessibilityRole="button">
+                  <MaterialIcons name="place" size={18} color={COLORS.outline} />
+                  <View style={styles.suggestionText}>
+                    <Text style={styles.suggestionTitle} numberOfLines={1}>{p.main_text}</Text>
+                    {!!p.secondary_text && (
+                      <Text style={styles.suggestionSub} numberOfLines={1}>{p.secondary_text}</Text>
+                    )}
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          )}
         </View>
+
+        {/* Drop-off */}
         <View style={styles.field}>
           <Text style={styles.fieldLabel}>DROP-OFF</Text>
           <View style={styles.input}>
             <MaterialIcons name="location-on" size={20} color={COLORS.outline} />
-            <Text style={styles.inputValue}>Ikeja City Mall, Lagos</Text>
+            <TextInput
+              value={dropoffSearch.query}
+              onChangeText={dropoffSearch.onChangeText}
+              placeholder="Search drop-off location"
+              placeholderTextColor={COLORS.outline}
+              style={styles.inputValue}
+            />
+            {dropoffSearch.loading && <ActivityIndicator size="small" color={COLORS.primary} />}
           </View>
+          {dropoffSearch.predictions.length > 0 && (
+            <View style={styles.suggestions}>
+              {dropoffSearch.predictions.map((p) => (
+                <Pressable
+                  key={p.place_id}
+                  onPress={() => handleDropoffSelect(p)}
+                  style={({ pressed }) => [styles.suggestionRow, pressed && styles.suggestionPressed]}
+                  accessibilityRole="button">
+                  <MaterialIcons name="place" size={18} color={COLORS.outline} />
+                  <View style={styles.suggestionText}>
+                    <Text style={styles.suggestionTitle} numberOfLines={1}>{p.main_text}</Text>
+                    {!!p.secondary_text && (
+                      <Text style={styles.suggestionSub} numberOfLines={1}>{p.secondary_text}</Text>
+                    )}
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          )}
         </View>
-
-        {/* Package type */}
-        <Text style={styles.sectionTitle}>PACKAGE TYPE</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.typeScroller}>
-          {CATEGORIES.map((c) => {
-            const isSelected = category === c.key;
-            return (
-              <Pressable
-                key={c.key}
-                onPress={() => setCategory(c.key)}
-                style={[styles.typeCard, isSelected && styles.typeCardSelected]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: isSelected }}>
-                <MaterialIcons
-                  name={c.icon}
-                  size={28}
-                  color={isSelected ? COLORS.onPrimaryContainer : COLORS.onSurface}
-                />
-                <Text style={[styles.typeLabel, isSelected && styles.typeLabelSelected]}>
-                  {c.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
 
         {/* Package size */}
         <Text style={styles.sectionTitle}>PACKAGE SIZE</Text>
@@ -171,36 +256,53 @@ export function InstantQuote() {
         </View>
 
         {/* Pricing card */}
-        <View style={styles.priceCard}>
-          <Text style={styles.priceLabel}>ESTIMATED TOTAL</Text>
-          <View style={styles.priceRow}>
-            <Text style={styles.priceCurrency}>₦</Text>
-            <Text style={styles.priceValue}>2,450</Text>
+        {showEstimate && (
+          <View style={styles.priceCard}>
+            <Text style={styles.priceLabel}>ESTIMATED TOTAL</Text>
+            {routeLoading ? (
+              <ActivityIndicator size="large" color={COLORS.primary} style={{ marginVertical: 12 }} />
+            ) : total != null ? (
+              <View style={styles.priceRow}>
+                <Text style={styles.priceCurrency}>₦</Text>
+                <Text style={styles.priceValue}>{formatPrice(total)}</Text>
+              </View>
+            ) : (
+              <Text style={styles.priceHint}>
+                Add pickup and drop-off to see your price
+              </Text>
+            )}
+            {km != null && (
+              <View style={styles.priceMeta}>
+                <View style={styles.priceMetaItem}>
+                  <MaterialIcons name="straighten" size={16} color={COLORS.onSurfaceVariant} />
+                  <Text style={styles.priceMetaText}>{km.toFixed(1)} km</Text>
+                </View>
+                {durationSeconds != null && (
+                  <>
+                    <View style={styles.priceDot} />
+                    <View style={styles.priceMetaItem}>
+                      <MaterialIcons name="schedule" size={16} color={COLORS.onSurfaceVariant} />
+                      <Text style={styles.priceMetaText}>~{Math.round(durationSeconds / 60)} min</Text>
+                    </View>
+                  </>
+                )}
+              </View>
+            )}
           </View>
-          <View style={styles.priceMeta}>
-            <View style={styles.priceMetaItem}>
-              <MaterialIcons name="straighten" size={16} color={COLORS.onSurfaceVariant} />
-              <Text style={styles.priceMetaText}>12.4 km</Text>
-            </View>
-            <View style={styles.priceDot} />
-            <View style={styles.priceMetaItem}>
-              <MaterialIcons name="schedule" size={16} color={COLORS.onSurfaceVariant} />
-              <Text style={styles.priceMetaText}>~32 min</Text>
-            </View>
-          </View>
-          <View style={styles.priceTag}>
-            <MaterialIcons name="electric-moped" size={18} color={COLORS.primary} />
-            <Text style={styles.priceTagText}>Electric Express Delivery</Text>
-          </View>
-        </View>
+        )}
 
         {/* CTA */}
         <Pressable
-          onPress={() => router.push('/schedule')}
-          style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
+          onPress={handleEstimate}
+          disabled={!canEstimate}
+          style={({ pressed }) => [
+            styles.cta,
+            !canEstimate && styles.ctaDisabled,
+            pressed && canEstimate && styles.ctaPressed,
+          ]}
           accessibilityRole="button">
-          <Text style={styles.ctaText}>Book this delivery</Text>
-          <MaterialIcons name="arrow-forward" size={24} color={COLORS.onPrimaryContainer} />
+          <Text style={styles.ctaText}>Get estimated price</Text>
+          <MaterialIcons name="calculate" size={24} color={COLORS.onPrimaryContainer} />
         </Pressable>
       </ScrollView>
     </View>
@@ -285,6 +387,39 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.onSurface,
   },
+  suggestions: {
+    marginTop: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(206, 198, 173, 0.5)',
+    backgroundColor: COLORS.surfaceLowest,
+    overflow: 'hidden',
+  },
+  suggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.outlineVariant,
+  },
+  suggestionPressed: {
+    backgroundColor: COLORS.surfaceContainerLow,
+  },
+  suggestionText: {
+    flex: 1,
+  },
+  suggestionTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.onSurface,
+  },
+  suggestionSub: {
+    fontSize: 12,
+    color: COLORS.outline,
+    marginTop: 2,
+  },
   sectionTitle: {
     fontSize: 14,
     fontWeight: '600',
@@ -293,34 +428,6 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 12,
     paddingHorizontal: 4,
-  },
-  typeScroller: {
-    gap: 12,
-    paddingBottom: 8,
-  },
-  typeCard: {
-    width: 96,
-    height: 96,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(206, 198, 173, 0.5)',
-    backgroundColor: COLORS.surfaceContainerLow,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  typeCardSelected: {
-    backgroundColor: COLORS.primaryContainer,
-    borderColor: COLORS.primaryContainer,
-  },
-  typeLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.onSurface,
-  },
-  typeLabelSelected: {
-    fontWeight: '700',
-    color: COLORS.onPrimaryContainer,
   },
   sizeGrid: {
     flexDirection: 'row',
@@ -399,6 +506,13 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     color: COLORS.secondary,
   },
+  priceHint: {
+    fontSize: 14,
+    color: COLORS.outline,
+    textAlign: 'center',
+    marginVertical: 12,
+    paddingHorizontal: 8,
+  },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -464,6 +578,9 @@ const styles = StyleSheet.create({
   },
   ctaPressed: {
     transform: [{ scale: 0.98 }],
+  },
+  ctaDisabled: {
+    opacity: 0.5,
   },
   ctaText: {
     fontSize: 24,

@@ -20,8 +20,12 @@ export type DraftEndpoint = {
 type DraftOrder = {
   pickup: DraftEndpoint | null;
   dropoff: DraftEndpoint | null;
+  // What the user is sending (from the "What are you sending?" screen).
+  category: string;
+  categoryDescription: string;
   size: string;
   weight: number;
+  specialInstructions: string;
 };
 
 type DraftOrderContextValue = DraftOrder & {
@@ -29,15 +33,19 @@ type DraftOrderContextValue = DraftOrder & {
   setDropoff: (place: PlaceLocation, extra?: Partial<DraftEndpoint>) => void;
   updatePickup: (patch: Partial<DraftEndpoint>) => void;
   updateDropoff: (patch: Partial<DraftEndpoint>) => void;
-  setPackage: (size: string, weight: number) => void;
+  setCategory: (category: string, description?: string) => void;
+  setPackage: (size: string, weight: number, specialInstructions?: string) => void;
   reset: () => void;
 };
 
 const DEFAULT: DraftOrder = {
   pickup: null,
   dropoff: null,
+  category: '',
+  categoryDescription: '',
   size: 'm',
   weight: 5.5,
+  specialInstructions: '',
 };
 
 const DraftOrderContext = createContext<DraftOrderContextValue | null>(null);
@@ -62,15 +70,31 @@ export function DraftOrderProvider({ children }: { children: React.ReactNode }) 
     setDraft((d) => (d.dropoff ? { ...d, dropoff: { ...d.dropoff, ...patch } } : d));
   }, []);
 
-  const setPackage = useCallback((size: string, weight: number) => {
-    setDraft((d) => ({ ...d, size, weight }));
+  const setCategory = useCallback((category: string, description = '') => {
+    setDraft((d) => ({ ...d, category, categoryDescription: description }));
   }, []);
+
+  const setPackage = useCallback(
+    (size: string, weight: number, specialInstructions = '') => {
+      setDraft((d) => ({ ...d, size, weight, specialInstructions }));
+    },
+    [],
+  );
 
   const reset = useCallback(() => setDraft(DEFAULT), []);
 
   const value = useMemo<DraftOrderContextValue>(
-    () => ({ ...draft, setPickup, setDropoff, updatePickup, updateDropoff, setPackage, reset }),
-    [draft, setPickup, setDropoff, updatePickup, updateDropoff, setPackage, reset],
+    () => ({
+      ...draft,
+      setPickup,
+      setDropoff,
+      updatePickup,
+      updateDropoff,
+      setCategory,
+      setPackage,
+      reset,
+    }),
+    [draft, setPickup, setDropoff, updatePickup, updateDropoff, setCategory, setPackage, reset],
   );
 
   return <DraftOrderContext.Provider value={value}>{children}</DraftOrderContext.Provider>;

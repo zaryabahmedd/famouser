@@ -61,11 +61,11 @@ type Order = {
 };
 
 const ORDERS: Order[] = [
-  { id: 'o1', code: 'FAMO-94821', icon: 'inventory-2', from: 'DHA Phase 5', to: 'Gulberg III', time: 'Today · 10:32 AM', price: 'Rs 566', status: 'transit' },
-  { id: 'o2', code: 'FAMO-94815', icon: 'inventory', from: 'Office', to: 'Lahore Cantt', time: 'Today · 09:18 AM', price: 'Rs 420', status: 'picked' },
-  { id: 'o3', code: 'FAMO-94800', icon: 'inventory-2', from: 'Home', to: "Mom's House", time: 'Yesterday · 6:40 PM', price: 'Rs 380', status: 'delivered', highlight: true },
-  { id: 'o4', code: 'FAMO-94782', icon: 'inventory-2', from: 'Warehouse', to: 'Shop', time: 'May 12 · 2:15 PM', price: 'Rs 1,240', status: 'delivered' },
-  { id: 'o5', code: 'FAMO-94771', icon: 'inventory', from: 'DHA', to: 'Bahria', time: 'May 10 · 11:00 AM', price: 'Rs 0', status: 'cancelled' },
+  { id: 'o1', code: 'FAMO-94821', icon: 'inventory-2', from: 'DHA Phase 5', to: 'Gulberg III', time: 'Today · 10:32 AM', price: '₦566', status: 'transit' },
+  { id: 'o2', code: 'FAMO-94815', icon: 'inventory', from: 'Office', to: 'Lahore Cantt', time: 'Today · 09:18 AM', price: '₦420', status: 'picked' },
+  { id: 'o3', code: 'FAMO-94800', icon: 'inventory-2', from: 'Home', to: "Mom's House", time: 'Yesterday · 6:40 PM', price: '₦380', status: 'delivered', highlight: true },
+  { id: 'o4', code: 'FAMO-94782', icon: 'inventory-2', from: 'Warehouse', to: 'Shop', time: 'May 12 · 2:15 PM', price: '₦1,240', status: 'delivered' },
+  { id: 'o5', code: 'FAMO-94771', icon: 'inventory', from: 'DHA', to: 'Bahria', time: 'May 10 · 11:00 AM', price: '₦0', status: 'cancelled' },
 ];
 
 export function Orders() {

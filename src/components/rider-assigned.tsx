@@ -2,6 +2,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import {
     Platform,
     Pressable,
@@ -11,6 +12,9 @@ import {
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { useDeliveryStatus } from '@/hooks/use-delivery-status';
+
 
 const COLORS = {
   surface: '#ffffff',
@@ -34,6 +38,22 @@ export function RiderAssigned() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{ deliveryId?: string; riderId?: string }>();
+  const deliveryId = typeof params.deliveryId === 'string' ? params.deliveryId : null;
+  const { delivery } = useDeliveryStatus(deliveryId);
+
+  // React to status changes that mean this rider is no longer assigned.
+  useEffect(() => {
+    if (!delivery) return;
+    if (delivery.status === 'searching') {
+      // The assigned rider cancelled; the backend has already re-dispatched the
+      // request to the next nearest riders. Return to the searching screen so the
+      // user isn't stuck looking at a rider who is no longer coming.
+      router.replace({ pathname: '/finding-rider', params: { deliveryId: delivery.id } });
+    } else if (delivery.status === 'cancelled') {
+      // The delivery was fully cancelled (e.g. by the user). Leave this screen.
+      router.replace('/orders');
+    }
+  }, [delivery, router]);
 
   return (
     <View style={styles.root}>

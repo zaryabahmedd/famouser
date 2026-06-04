@@ -52,16 +52,16 @@ const STEP = 0.5;
 export function SizeWeight() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { size: draftSize, weight: draftWeight, setPackage } = useDraftOrder();
+  const { size: draftSize, weight: draftWeight, specialInstructions, setPackage } = useDraftOrder();
   const [size, setSize] = useState(draftSize);
   const [weight, setWeight] = useState(draftWeight);
-  const [instructions, setInstructions] = useState('');
+  const [instructions, setInstructions] = useState(specialInstructions);
 
   const decrement = () => setWeight((w) => Math.max(MIN_WEIGHT, +(w - STEP).toFixed(1)));
   const increment = () => setWeight((w) => Math.min(MAX_WEIGHT, +(w + STEP).toFixed(1)));
 
   const handleContinue = () => {
-    setPackage(size, weight);
+    setPackage(size, weight, instructions.trim());
     router.push('/pickup-time');
   };
 

@@ -2,6 +2,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import {
     Alert,
     Platform,
@@ -12,10 +13,11 @@ import {
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Circle, Path } from 'react-native-svg';
 
 import { useDeliveryStatus } from '@/hooks/use-delivery-status';
 import { useRiderTracking } from '@/hooks/use-rider-tracking';
+
+import { TrackingMap } from './tracking-map';
 
 const COLORS = {
   surface: '#ffffff',
@@ -23,20 +25,15 @@ const COLORS = {
   famoText: '#1F2937',
   famoGray: '#F3F4F6',
   mapBg: '#EBF2FA',
-  road: '#CBD5E1',
-  gridLine: 'rgba(255,255,255,0.5)',
   textMuted: '#6B7280',
   textFaint: '#9CA3AF',
   green: '#22C55E',
   border: '#F3F4F6',
 };
 
-const SCOOTER_URI =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuDA_ys7jZru4JUEminhMUshMXRTTxgn02_cJAYf2U0R2JkcvDzG5bVoWU2xZdp7_EkFVOQeXoSiNpe1hJT0wYfYWNhP7X1ZjtfMSQQHvgNE3OnncG7WLM6b0hbd855wq1JZ_wwP3nLAnA35S60kD3drm7jL9HpqapLtCQf7qkpPpMBPZQdpei-qYO797bdS5IV49GKDPTHcdEBxztJiVZe2JLaWPgc_v3fQG4UrHInsZikXDXhUemgEivMrDyt4PSo4vU5k2ZaV7A';
-
 const AVATAR_URI = 'https://randomuser.me/api/portraits/men/75.jpg';
 
-const TAGS = ['Electronics', 'M · 5.5kg', 'Rs 566'];
+const TAGS = ['Electronics', 'M · 5.5kg', '₦566'];
 
 const STATUS_LABEL: Record<string, string> = {
   searching: 'Finding rider',
@@ -59,37 +56,36 @@ export function LiveTracking() {
     paramRiderId ?? delivery?.rider_id ?? null,
   );
 
+  // React to status changes that mean the current rider is no longer assigned.
+  useEffect(() => {
+    if (!delivery) return;
+    if (delivery.status === 'searching') {
+      // The assigned rider cancelled; the backend has already re-dispatched the
+      // request to the next nearest riders. Return to the searching screen.
+      router.replace({ pathname: '/finding-rider', params: { deliveryId: delivery.id } });
+    } else if (delivery.status === 'cancelled') {
+      router.replace('/orders');
+    } else if (delivery.status === 'delivered') {
+      // The rider confirmed drop-off (with proof photo); the delivery is done.
+      // Send the user to the success screen, which returns them home.
+      router.replace({ pathname: '/delivery-success', params: { deliveryId: delivery.id } });
+    }
+  }, [delivery, router]);
+
   return (
     <View style={styles.root}>
       <StatusBar style="dark" />
 
-      {/* Map background */}
+      {/* Live Google map: follows the rider and frames pickup + drop-off. */}
       <View style={styles.map}>
-        <Svg style={StyleSheet.absoluteFill} viewBox="0 0 400 800">
-          {/* Roads */}
-          <Path d="M-50 200 L450 200" stroke={COLORS.road} strokeWidth={32} opacity={0.4} />
-          <Path d="M100 -50 L100 850" stroke={COLORS.road} strokeWidth={32} opacity={0.4} />
-          <Path d="M300 -50 L300 850" stroke={COLORS.road} strokeWidth={32} opacity={0.4} />
-          {/* Route */}
-          <Path
-            d="M50 450 C 150 400, 250 300, 330 150"
-            stroke={COLORS.famoYellow}
-            strokeWidth={6}
-            strokeLinecap="round"
-            strokeDasharray="8 8"
+        {delivery ? (
+          <TrackingMap
+            rider={position}
+            pickup={{ lat: delivery.pickup_lat, lng: delivery.pickup_lng }}
+            dropoff={{ lat: delivery.dropoff_lat, lng: delivery.dropoff_lng }}
+            pickedUp={delivery.status === 'picked_up'}
           />
-          {/* Start marker */}
-          <Circle cx={50} cy={450} r={6} fill={COLORS.famoText} stroke="white" strokeWidth={2} />
-          <Circle cx={50} cy={450} r={10} stroke={COLORS.famoText} strokeWidth={2} opacity={0.2} />
-          {/* End marker */}
-          <Circle cx={330} cy={150} r={6} fill={COLORS.famoText} stroke="white" strokeWidth={2} />
-          <Circle cx={330} cy={150} r={10} stroke={COLORS.famoText} strokeWidth={2} opacity={0.2} />
-        </Svg>
-
-        {/* Rider position */}
-        <View style={styles.riderIcon}>
-          <Image source={{ uri: SCOOTER_URI }} style={styles.scooter} contentFit="contain" />
-        </View>
+        ) : null}
       </View>
 
       {/* Top navigation & status */}
@@ -196,7 +192,9 @@ export function LiveTracking() {
             <Text style={styles.footerBtnText}>Share trip</Text>
           </Pressable>
           <Pressable
-            onPress={() => router.push('/cancel-delivery')}
+            onPress={() =>
+              router.push({ pathname: '/cancel-delivery', params: { deliveryId: deliveryId ?? '' } })
+            }
             style={({ pressed }) => [styles.footerBtn, pressed && styles.pressed]}
             accessibilityRole="button">
             <Text style={styles.footerBtnText}>Cancel</Text>
@@ -216,16 +214,6 @@ const styles = StyleSheet.create({
   map: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: COLORS.mapBg,
-  },
-  riderIcon: {
-    position: 'absolute',
-    left: '12.5%',
-    top: '56%',
-    transform: [{ translateX: -32 }, { translateY: -32 }],
-  },
-  scooter: {
-    width: 64,
-    height: 64,
   },
   topBar: {
     flexDirection: 'row',

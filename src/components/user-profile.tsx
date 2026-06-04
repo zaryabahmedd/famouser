@@ -1,8 +1,9 @@
 import { useAuth } from '@/hooks/use-auth';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useCallback } from 'react';
 import {
     Platform,
     Pressable,
@@ -14,8 +15,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomNav } from '@/components/bottom-nav';
+import { useProfile } from '@/hooks/use-profile';
 
-const AVATAR_URI = 'https://randomuser.me/api/portraits/men/32.jpg';
+const AVATAR_FALLBACK = 'https://randomuser.me/api/portraits/lego/1.jpg';
 
 const COLORS = {
   surface: '#ffffff',
@@ -57,6 +59,18 @@ export function UserProfile() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { logout } = useAuth();
+  const { profile, reload } = useProfile();
+
+  // Refresh the profile each time this screen regains focus (e.g. returning
+  // from Edit profile) so name/photo changes show immediately.
+  useFocusEffect(
+    useCallback(() => {
+      reload();
+    }, [reload]),
+  );
+
+  const displayName = profile?.full_name?.trim() || 'Your profile';
+  const avatarUri = profile?.avatar_url ?? AVATAR_FALLBACK;
 
   return (
     <View style={styles.root}>
@@ -94,14 +108,12 @@ export function UserProfile() {
         {/* Profile header */}
         <View style={styles.profile}>
           <View style={styles.avatarRing}>
-            <Image source={{ uri: AVATAR_URI }} style={styles.avatar} contentFit="cover" />
+            <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" />
           </View>
-          <Text style={styles.name}>Ahmed Khan</Text>
+          <Text style={styles.name}>{displayName}</Text>
           <View style={styles.metaRow}>
             <MaterialIcons name="verified" size={18} color={COLORS.primary} />
             <Text style={styles.metaText}>Verified</Text>
-            <Text style={styles.metaDot}>•</Text>
-            <Text style={styles.metaText}>32 deliveries</Text>
           </View>
           <Pressable
             onPress={() => router.push('/edit-profile')}

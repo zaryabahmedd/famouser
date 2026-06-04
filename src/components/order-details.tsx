@@ -43,9 +43,9 @@ const STEPS: Step[] = [
 ];
 
 const FARE: { label: string; value: string }[] = [
-  { label: 'Base fare', value: 'Rs 320' },
-  { label: 'Distance (12.4 km)', value: 'Rs 186' },
-  { label: 'Service fee', value: 'Rs 60' },
+  { label: 'Base fare', value: '₦320' },
+  { label: 'Distance (12.4 km)', value: '₦186' },
+  { label: 'Service fee', value: '₦60' },
 ];
 
 export function OrderDetails() {
@@ -164,7 +164,7 @@ export function OrderDetails() {
           <View style={styles.fareDivider} />
           <View style={styles.fareRow}>
             <Text style={styles.totalLabel}>Total paid</Text>
-            <Text style={styles.totalValue}>Rs 566</Text>
+            <Text style={styles.totalValue}>₦566</Text>
           </View>
           <View style={styles.payMethod}>
             <MaterialIcons name="credit-card" size={18} color={COLORS.onSurfaceVariant} />

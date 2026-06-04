@@ -1,9 +1,11 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+    ActivityIndicator,
     Alert,
     Platform,
     Pressable,
@@ -15,7 +17,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const AVATAR_URI = 'https://randomuser.me/api/portraits/men/32.jpg';
+import { useProfile } from '@/hooks/use-profile';
+
+const AVATAR_FALLBACK = 'https://randomuser.me/api/portraits/lego/1.jpg';
 
 const COLORS = {
   surface: '#ffffff',
@@ -32,27 +36,67 @@ const COLORS = {
   onPrimaryFixed: '#211b00',
 };
 
-type Field = {
-  key: string;
-  label: string;
-  icon: keyof typeof MaterialIcons.glyphMap;
-  value: string;
-  keyboard?: 'default' | 'email-address' | 'phone-pad';
-};
-
 export function EditProfile() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { profile, loading, updateProfile, uploadAvatar } = useProfile();
 
-  const [fields, setFields] = useState<Field[]>([
-    { key: 'name', label: 'Full name', icon: 'person', value: 'Ahmed Khan' },
-    { key: 'email', label: 'Email', icon: 'mail', value: 'ahmed.khan@email.com', keyboard: 'email-address' },
-    { key: 'phone', label: 'Phone number', icon: 'phone', value: '+92 300 1234567', keyboard: 'phone-pad' },
-    { key: 'city', label: 'City', icon: 'location-city', value: 'Lahore' },
-  ]);
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
-  const update = (key: string, value: string) =>
-    setFields((prev) => prev.map((f) => (f.key === key ? { ...f, value } : f)));
+  // Hydrate the form once the profile loads.
+  useEffect(() => {
+    if (!profile) return;
+    setName(profile.full_name ?? '');
+    setPhone(profile.phone_number ?? '');
+    setAvatarUri(profile.avatar_url ?? null);
+  }, [profile]);
+
+  const handlePickPhoto = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Allow photo library access to change your picture.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+      base64: true,
+    });
+    if (result.canceled || !result.assets?.length) return;
+
+    const asset = result.assets[0];
+    setAvatarUri(asset.uri);
+    if (!asset.base64) return;
+
+    setUploading(true);
+    const err = await uploadAvatar(asset.base64, asset.mimeType ?? 'image/jpeg');
+    setUploading(false);
+    if (err) {
+      Alert.alert('Upload failed', err);
+      setAvatarUri(profile?.avatar_url ?? null);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!name.trim()) {
+      Alert.alert('Name required', 'Please enter your full name.');
+      return;
+    }
+    setSaving(true);
+    const err = await updateProfile({ full_name: name.trim(), phone_number: phone.trim() });
+    setSaving(false);
+    if (err) {
+      Alert.alert('Could not save', err);
+      return;
+    }
+    router.back();
+  };
 
   return (
     <View style={styles.root}>
@@ -78,51 +122,91 @@ export function EditProfile() {
         {/* Avatar */}
         <View style={styles.avatarSection}>
           <View style={styles.avatarRing}>
-            <Image source={{ uri: AVATAR_URI }} style={styles.avatar} contentFit="cover" />
+            <Image
+              source={{ uri: avatarUri ?? AVATAR_FALLBACK }}
+              style={styles.avatar}
+              contentFit="cover"
+            />
+            {uploading && (
+              <View style={styles.avatarOverlay}>
+                <ActivityIndicator color={COLORS.onPrimaryFixed} />
+              </View>
+            )}
             <Pressable
-              onPress={() =>
-                Alert.alert('Change photo', 'Update your profile picture', [
-                  { text: 'Take photo' },
-                  { text: 'Choose from library' },
-                  { text: 'Cancel', style: 'cancel' },
-                ])
-              }
+              onPress={handlePickPhoto}
+              disabled={uploading}
               style={styles.cameraBtn}
               accessibilityRole="button"
               accessibilityLabel="Change photo">
               <MaterialIcons name="photo-camera" size={18} color={COLORS.onPrimaryFixed} />
             </Pressable>
           </View>
-          <Text style={styles.changePhoto}>Change photo</Text>
+          <Pressable onPress={handlePickPhoto} disabled={uploading}>
+            <Text style={styles.changePhoto}>{uploading ? 'Uploading…' : 'Change photo'}</Text>
+          </Pressable>
         </View>
 
         {/* Fields */}
         <View style={styles.fields}>
-          {fields.map((f) => (
-            <View key={f.key} style={styles.field}>
-              <Text style={styles.fieldLabel}>{f.label}</Text>
-              <View style={styles.inputRow}>
-                <MaterialIcons name={f.icon} size={20} color={COLORS.outline} />
-                <TextInput
-                  value={f.value}
-                  onChangeText={(text) => update(f.key, text)}
-                  keyboardType={f.keyboard ?? 'default'}
-                  placeholderTextColor={COLORS.outline}
-                  style={styles.input}
-                />
-              </View>
+          <View style={styles.field}>
+            <Text style={styles.fieldLabel}>Full name</Text>
+            <View style={styles.inputRow}>
+              <MaterialIcons name="person" size={20} color={COLORS.outline} />
+              <TextInput
+                value={name}
+                onChangeText={setName}
+                placeholder="Full name"
+                placeholderTextColor={COLORS.outline}
+                style={styles.input}
+              />
             </View>
-          ))}
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.fieldLabel}>Email</Text>
+            <View style={[styles.inputRow, styles.inputRowDisabled]}>
+              <MaterialIcons name="mail" size={20} color={COLORS.outline} />
+              <TextInput
+                value={profile?.email ?? ''}
+                editable={false}
+                style={[styles.input, styles.inputDisabled]}
+              />
+            </View>
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.fieldLabel}>Phone number</Text>
+            <View style={styles.inputRow}>
+              <MaterialIcons name="phone" size={20} color={COLORS.outline} />
+              <TextInput
+                value={phone}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
+                placeholder="Phone number"
+                placeholderTextColor={COLORS.outline}
+                style={styles.input}
+              />
+            </View>
+          </View>
         </View>
       </ScrollView>
 
       {/* Save */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
         <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [styles.save, pressed && styles.savePressed]}
+          onPress={handleSave}
+          disabled={saving || loading}
+          style={({ pressed }) => [
+            styles.save,
+            (saving || loading) && styles.saveDisabled,
+            pressed && styles.savePressed,
+          ]}
           accessibilityRole="button">
-          <Text style={styles.saveText}>Save changes</Text>
+          {saving ? (
+            <ActivityIndicator color={COLORS.onPrimaryContainer} />
+          ) : (
+            <Text style={styles.saveText}>Save changes</Text>
+          )}
         </Pressable>
       </View>
     </View>
@@ -182,6 +266,14 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: COLORS.surfaceContainerHigh,
   },
+  avatarOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 999,
+    margin: 4,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   cameraBtn: {
     position: 'absolute',
     bottom: 0,
@@ -224,11 +316,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.outlineVariant,
   },
+  inputRowDisabled: {
+    backgroundColor: COLORS.surfaceContainerHigh,
+  },
   input: {
     flex: 1,
     fontSize: 16,
     color: COLORS.onSurface,
     ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null),
+  },
+  inputDisabled: {
+    color: COLORS.secondary,
   },
   footer: {
     paddingHorizontal: 20,
@@ -246,6 +344,9 @@ const styles = StyleSheet.create({
   },
   savePressed: {
     transform: [{ scale: 0.98 }],
+  },
+  saveDisabled: {
+    opacity: 0.6,
   },
   saveText: {
     fontSize: 16,

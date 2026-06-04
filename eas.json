@@ -19,7 +19,9 @@
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://yoyscueorzeapqolutvp.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_KtzItQ2aEYjoLWQyr71GLg_9hiXVGa_",
-        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyArKLk-HgW6rzHvL30UG70sux3FjepcSSI"
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyArKLk-HgW6rzHvL30UG70sux3FjepcSSI",
+        "EXPO_PUBLIC_BACKEND_URL": "https://fam.ubiqco.com",
+        "EXPO_PUBLIC_PLACES_COUNTRY": "ng"
       }
     },
     "production": {

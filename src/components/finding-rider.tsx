@@ -95,6 +95,19 @@ export function FindingRider() {
   const deliveryId = typeof params.deliveryId === 'string' ? params.deliveryId : null;
   const { delivery } = useDeliveryStatus(deliveryId);
 
+  // Human-readable label for the package category badge.
+  const CATEGORY_LABELS: Record<string, string> = {
+    documents: 'Documents',
+    electronics: 'Electronics',
+    fragile: 'Fragile',
+    food: 'Food',
+    other: 'Other',
+  };
+  const packageBadge =
+    (delivery?.package_category === 'other' && delivery?.package_description) ||
+    (delivery?.package_category ? CATEGORY_LABELS[delivery.package_category] : null) ||
+    'Standard';
+
   useEffect(() => {
     // Preview fallback: without a real delivery id, simulate assignment.
     if (deliveryId) return;
@@ -197,7 +210,7 @@ export function FindingRider() {
           <View style={styles.summaryHeader}>
             <Text style={styles.summaryTitle}>SHIPMENT SUMMARY</Text>
             <View style={styles.summaryBadge}>
-              <Text style={styles.summaryBadgeText}>Standard</Text>
+              <Text style={styles.summaryBadgeText}>{packageBadge}</Text>
             </View>
           </View>
           <View style={styles.route}>
@@ -210,13 +223,13 @@ export function FindingRider() {
               <View style={styles.routeBlock}>
                 <Text style={styles.routeLabel}>Pick-up</Text>
                 <Text style={styles.routeValue} numberOfLines={1}>
-                  24 Industrial Avenue, Sector 5
+                  {delivery?.pickup_address ?? 'Pickup location'}
                 </Text>
               </View>
               <View style={styles.routeBlock}>
                 <Text style={styles.routeLabel}>Drop-off</Text>
                 <Text style={styles.routeValue} numberOfLines={1}>
-                  Metropolis Center, Suite 402
+                  {delivery?.dropoff_address ?? 'Drop-off location'}
                 </Text>
               </View>
             </View>
@@ -225,7 +238,9 @@ export function FindingRider() {
 
         {/* Cancel */}
         <Pressable
-          onPress={() => router.push('/cancel-delivery')}
+          onPress={() =>
+            router.push({ pathname: '/cancel-delivery', params: { deliveryId: deliveryId ?? '' } })
+          }
           style={({ pressed }) => [styles.cancel, pressed && styles.cancelPressed]}
           accessibilityRole="button">
           <MaterialIcons name="cancel" size={20} color={COLORS.secondary} />

@@ -1,7 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     KeyboardAvoidingView,
@@ -15,9 +15,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { MapPreview } from '@/components/map-preview';
 import { useDraftOrder } from '@/hooks/use-draft-order';
 import { usePlaceSearch } from '@/hooks/use-place-search';
-import { autocompletePlaces, getPlaceDetails, newPlacesSession } from '@/lib/geo';
+import { autocompletePlaces, geocodeAddress, getPlaceDetails, newPlacesSession } from '@/lib/geo';
 
 const COLORS = {
   surface: '#ffffff',
@@ -51,36 +52,72 @@ const RECENT: RecentPlace[] = [
 export function DropoffAddress() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { setDropoff, updateDropoff } = useDraftOrder();
-  const search = usePlaceSearch();
-  const [picked, setPicked] = useState(false);
-  const [detail, setDetail] = useState('');
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [notes, setNotes] = useState('');
+  const { dropoff, setDropoff, updateDropoff } = useDraftOrder();
+  // Two independent autocomplete fields: a city (coarse, pans the map) and the
+  // precise address (geocoded, reveals the fine-tune pin option).
+  const citySearch = usePlaceSearch();
+  const addressSearch = usePlaceSearch(dropoff?.address ?? '');
+  const [detail, setDetail] = useState(dropoff?.detail ?? '');
+  const [name, setName] = useState(dropoff?.contactName ?? '');
+  const [phone, setPhone] = useState(dropoff?.contactPhone ?? '');
+  const [notes, setNotes] = useState(dropoff?.notes ?? '');
 
-  const canContinue =
-    (picked || search.query.trim().length > 1) &&
-    name.trim().length > 0 &&
-    phone.trim().length > 0;
+  // What the map is currently centered on, and how tightly it is zoomed.
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(
+    dropoff ? { lat: dropoff.lat, lng: dropoff.lng } : null,
+  );
+  const [mapSpan, setMapSpan] = useState(dropoff ? 0.01 : 0.08);
+  // True once a precise address has been geocoded; gates the pin / "Move on map"
+  // option so it only appears after the map has navigated to the address.
+  const [addressResolved, setAddressResolved] = useState(!!dropoff);
 
-  const handleRecentSelect = (address: string) => {
-    search.setQuery(address);
-    setPicked(true);
-    // Set Lahore center coordinates as initial fallback
-    setDropoff({
-      address,
-      lat: 31.5204,
-      lng: 74.3587,
+  // The Continue button is always enabled; handleContinue resolves any missing
+  // location via geocoding/map pin before advancing.
+  const canContinue = true;
+
+  const openMapPicker = () => {
+    router.push({
+      pathname: '/map-picker',
+      params: {
+        mode: 'dropoff',
+        ...(dropoff ? { lat: String(dropoff.lat), lng: String(dropoff.lng) } : {}),
+        address: addressSearch.query || dropoff?.address || '',
+      },
     });
-    // Dynamically look up full coordinates in the background
+  };
+
+  // City selected -> set it as the drop-off location and move the map there. The
+  // user can fine-tune the exact spot with the map pin ("Move on map").
+  const handleCitySelect = async (placeId: string, description: string) => {
+    const place = await citySearch.select({
+      place_id: placeId,
+      description,
+      main_text: description,
+      secondary_text: '',
+    });
+    if (place) {
+      setDropoff(place);
+      setMapCenter({ lat: place.lat, lng: place.lng });
+      setMapSpan(0.05);
+      setAddressResolved(true);
+    }
+  };
+
+  // Address selected -> geocode, move the map to the exact spot, and reveal the
+  // fine-tune pin option.
+  const handleRecentSelect = (address: string) => {
+    addressSearch.setQuery(address);
+    // Resolve the recent place to precise coordinates in the background.
     autocompletePlaces(address, newPlacesSession())
-      .then((results: any[]) => {
+      .then((results) => {
         if (results.length > 0) {
           getPlaceDetails(results[0].place_id, newPlacesSession())
-            .then((place: any) => {
+            .then((place) => {
               if (place) {
                 setDropoff(place);
+                setMapCenter({ lat: place.lat, lng: place.lng });
+                setMapSpan(0.01);
+                setAddressResolved(true);
               }
             })
             .catch(() => {});
@@ -89,44 +126,56 @@ export function DropoffAddress() {
       .catch(() => {});
   };
 
-  const handleSelect = async (placeId: string, description: string) => {
-    const place = await search.select({
-      place_id: placeId,
-      description,
-      main_text: description,
-      secondary_text: '',
-    });
-    if (place) {
-      setDropoff(place);
-      setPicked(true);
+  const handlePinMove = (lat: number, lng: number) => {
+    setMapCenter({ lat, lng });
+    if (dropoff) {
+      updateDropoff({ lat, lng });
+    } else {
+      const address =
+        addressSearch.query.trim().length > 0
+          ? addressSearch.query
+          : `Pinned location (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+      setDropoff({ address, lat, lng });
     }
+    setAddressResolved(true);
   };
 
-  const handleContinue = async () => {
-    if (!picked && search.query.trim().length > 0) {
-      // Set Lahore center coordinates as initial fallback
-      setDropoff({
-        address: search.query,
-        lat: 31.5204,
-        lng: 74.3587,
-      });
-
-      try {
-        const results = await autocompletePlaces(search.query, newPlacesSession());
-        if (results.length > 0) {
-          const place = await getPlaceDetails(results[0].place_id, newPlacesSession());
-          if (place) {
-            setDropoff(place);
+  // Auto-geocode the typed city so the map and the draft drop-off location stay
+  // in sync even if the user types without tapping a suggestion.
+  const lastCityGeocode = useRef('');
+  useEffect(() => {
+    const q = citySearch.query.trim();
+    if (q.length < 3 || q === lastCityGeocode.current) return;
+    const t = setTimeout(() => {
+      lastCityGeocode.current = q;
+      geocodeAddress(q)
+        .then((place) => {
+          if (place?.lat != null) {
+            setDropoff({ address: place.address || q, lat: place.lat, lng: place.lng });
+            setMapCenter({ lat: place.lat, lng: place.lng });
+            setMapSpan(0.05);
+            setAddressResolved(true);
           }
-        }
-      } catch (err) {
-        console.warn('Geocoding fallback failed:', err);
-      }
+        })
+        .catch(() => {});
+    }, 700);
+    return () => clearTimeout(t);
+  }, [citySearch.query]);
+
+  const handleContinue = async () => {
+    // Fall back to the map center if the user only moved the pin without a city.
+    if (!dropoff && mapCenter) {
+      setDropoff({
+        address: `Pinned location (${mapCenter.lat.toFixed(5)}, ${mapCenter.lng.toFixed(5)})`,
+        lat: mapCenter.lat,
+        lng: mapCenter.lng,
+      });
     }
 
     updateDropoff({ detail, contactName: name, contactPhone: phone, notes });
     router.push('/size-weight');
   };
+
 
   return (
     <KeyboardAvoidingView
@@ -161,23 +210,17 @@ export function DropoffAddress() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled">
-        {/* Map placeholder */}
-        <View style={styles.map}>
-          <View style={styles.mapGrid} />
-          <View style={styles.mapPin}>
-            <View style={[styles.pinBadge, { backgroundColor: COLORS.dropoff }]}>
-              <MaterialIcons name="place" size={18} color="#ffffff" />
-            </View>
-            <View style={[styles.pinStem, { backgroundColor: COLORS.dropoff }]} />
-          </View>
-          <Pressable
-            onPress={() => search.onChangeText('')}
-            style={({ pressed }) => [styles.mapBtn, pressed && styles.mapBtnPressed]}
-            accessibilityRole="button">
-            <MaterialIcons name="my-location" size={18} color={COLORS.onSurface} />
-            <Text style={styles.mapBtnText}>Move on map</Text>
-          </Pressable>
-        </View>
+        {/* Map preview */}
+        <MapPreview
+          lat={mapCenter?.lat}
+          lng={mapCenter?.lng}
+          tint={COLORS.dropoff}
+          kind="dropoff"
+          onMovePress={openMapPicker}
+          onCoordinateChange={handlePinMove}
+          showMoveButton={!!mapCenter}
+          spanDelta={mapSpan}
+        />
 
         {/* Recent places */}
         <ScrollView
@@ -196,33 +239,31 @@ export function DropoffAddress() {
           ))}
         </ScrollView>
 
-        {/* Address */}
-        <Text style={styles.sectionTitle}>Drop-off location</Text>
+        {/* City */}
+        <Text style={styles.sectionTitle}>Enter City (Drop-Off Location)</Text>
         <View style={styles.field}>
-          <MaterialIcons name="place" size={20} color={COLORS.dropoff} />
+          <MaterialIcons name="location-city" size={20} color={COLORS.dropoff} />
           <TextInput
-            value={search.query}
-            onChangeText={search.onChangeText}
-            placeholder="Search or enter address"
+            value={citySearch.query}
+            onChangeText={citySearch.onChangeText}
+            placeholder="Search city"
             placeholderTextColor={COLORS.outline}
             style={styles.input}
-            autoFocus
-            multiline
           />
-          {search.loading ? <ActivityIndicator size="small" color={COLORS.primary} /> : null}
+          {citySearch.loading ? <ActivityIndicator size="small" color={COLORS.primary} /> : null}
         </View>
-        {search.unavailable ? (
-          <Text style={styles.hint}>Address search is temporarily unavailable.</Text>
+        {citySearch.unavailable ? (
+          <Text style={styles.hint}>City search is temporarily unavailable.</Text>
         ) : null}
-        {search.predictions.length > 0 ? (
+        {citySearch.predictions.length > 0 ? (
           <View style={styles.suggestions}>
-            {search.predictions.map((p) => (
+            {citySearch.predictions.map((p) => (
               <Pressable
                 key={p.place_id}
-                onPress={() => handleSelect(p.place_id, p.description)}
+                onPress={() => handleCitySelect(p.place_id, p.description)}
                 style={({ pressed }) => [styles.suggestion, pressed && styles.suggestionPressed]}
                 accessibilityRole="button">
-                <MaterialIcons name="place" size={18} color={COLORS.outline} />
+                <MaterialIcons name="location-city" size={18} color={COLORS.outline} />
                 <View style={styles.suggestionText}>
                   <Text style={styles.suggestionMain} numberOfLines={1}>
                     {p.main_text || p.description}
@@ -237,16 +278,6 @@ export function DropoffAddress() {
             ))}
           </View>
         ) : null}
-        <View style={styles.field}>
-          <MaterialIcons name="apartment" size={20} color={COLORS.outline} />
-          <TextInput
-            value={detail}
-            onChangeText={setDetail}
-            placeholder="Apartment, floor, building (optional)"
-            placeholderTextColor={COLORS.outline}
-            style={styles.input}
-          />
-        </View>
 
         {/* Recipient contact */}
         <Text style={styles.sectionTitle}>Recipient details</Text>

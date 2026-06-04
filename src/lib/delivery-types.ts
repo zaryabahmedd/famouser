@@ -21,6 +21,18 @@ export type Delivery = {
   dropoff_lng: number;
   weight: number | null;
   price: number | null;
+  // What the user is sending and how it's packaged.
+  package_category: string | null;
+  package_description: string | null;
+  package_size: string | null;
+  // Pickup (sender) + drop-off (recipient) contacts and instructions.
+  sender_name: string | null;
+  sender_phone: string | null;
+  recipient_name: string | null;
+  recipient_phone: string | null;
+  pickup_notes: string | null;
+  dropoff_notes: string | null;
+  special_instructions: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -35,6 +47,16 @@ export type NewDeliveryInput = {
   dropoff_lng: number;
   weight?: number | null;
   price?: number | null;
+  package_category?: string | null;
+  package_description?: string | null;
+  package_size?: string | null;
+  sender_name?: string | null;
+  sender_phone?: string | null;
+  recipient_name?: string | null;
+  recipient_phone?: string | null;
+  pickup_notes?: string | null;
+  dropoff_notes?: string | null;
+  special_instructions?: string | null;
 };
 
 // ---- Live-tracking Realtime contract (must match the rider app) ----

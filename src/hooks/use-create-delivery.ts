@@ -39,6 +39,16 @@ export function useCreateDelivery() {
           dropoff_lng: input.dropoff_lng,
           weight: input.weight ?? null,
           price: input.price ?? null,
+          package_category: input.package_category ?? null,
+          package_description: input.package_description ?? null,
+          package_size: input.package_size ?? null,
+          sender_name: input.sender_name ?? null,
+          sender_phone: input.sender_phone ?? null,
+          recipient_name: input.recipient_name ?? null,
+          recipient_phone: input.recipient_phone ?? null,
+          pickup_notes: input.pickup_notes ?? null,
+          dropoff_notes: input.dropoff_notes ?? null,
+          special_instructions: input.special_instructions ?? null,
         })
         .select()
         .single();

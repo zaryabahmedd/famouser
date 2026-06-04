@@ -62,7 +62,7 @@ const ACCOUNT: LinkRow[] = [
 
 const PREFERENCES: LinkRow[] = [
   { key: 'language', icon: 'translate', label: 'Language', value: 'English' },
-  { key: 'currency', icon: 'payments', label: 'Currency', value: 'PKR (Rs)' },
+  { key: 'currency', icon: 'payments', label: 'Currency', value: 'NGN (₦)' },
 ];
 
 const PRIVACY: ToggleRow[] = [

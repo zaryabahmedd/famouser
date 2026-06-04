@@ -52,12 +52,12 @@ const TX_META: Record<TxType, { icon: keyof typeof MaterialIcons.glyphMap; bg: s
 };
 
 const TRANSACTIONS: Transaction[] = [
-  { id: 't1', type: 'payment', title: 'Delivery to Gulberg III', subtitle: 'Visa •••• 4242', amount: 'Rs 566', date: 'Today · 10:32 AM' },
-  { id: 't2', type: 'topup', title: 'Wallet top-up', subtitle: 'Bank transfer', amount: 'Rs 2,000', date: 'Today · 09:05 AM' },
-  { id: 't3', type: 'payment', title: 'Delivery to Lahore Cantt', subtitle: 'Wallet balance', amount: 'Rs 420', date: 'Yesterday · 6:40 PM' },
-  { id: 't4', type: 'refund', title: 'Refund · cancelled order', subtitle: 'Order #FAM-29310', amount: 'Rs 380', date: 'May 28 · 2:15 PM' },
-  { id: 't5', type: 'payment', title: 'Delivery to Bahria Town', subtitle: 'Mastercard •••• 8821', amount: 'Rs 1,240', date: 'May 26 · 11:00 AM' },
-  { id: 't6', type: 'topup', title: 'Wallet top-up', subtitle: 'Visa •••• 4242', amount: 'Rs 5,000', date: 'May 24 · 8:20 AM' },
+  { id: 't1', type: 'payment', title: 'Delivery to Gulberg III', subtitle: 'Visa •••• 4242', amount: '₦566', date: 'Today · 10:32 AM' },
+  { id: 't2', type: 'topup', title: 'Wallet top-up', subtitle: 'Bank transfer', amount: '₦2,000', date: 'Today · 09:05 AM' },
+  { id: 't3', type: 'payment', title: 'Delivery to Lahore Cantt', subtitle: 'Wallet balance', amount: '₦420', date: 'Yesterday · 6:40 PM' },
+  { id: 't4', type: 'refund', title: 'Refund · cancelled order', subtitle: 'Order #FAM-29310', amount: '₦380', date: 'May 28 · 2:15 PM' },
+  { id: 't5', type: 'payment', title: 'Delivery to Bahria Town', subtitle: 'Mastercard •••• 8821', amount: '₦1,240', date: 'May 26 · 11:00 AM' },
+  { id: 't6', type: 'topup', title: 'Wallet top-up', subtitle: 'Visa •••• 4242', amount: '₦5,000', date: 'May 24 · 8:20 AM' },
 ];
 
 const TYPE_FOR_FILTER: Record<string, TxType> = {
@@ -107,7 +107,7 @@ export function Wallet() {
         {/* Balance card */}
         <View style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>Wallet balance</Text>
-          <Text style={styles.balanceValue}>Rs 3,214</Text>
+          <Text style={styles.balanceValue}>₦3,214</Text>
           <View style={styles.balanceActions}>
             <Pressable
               onPress={() => router.push('/add-card')}

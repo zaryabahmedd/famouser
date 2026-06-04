@@ -17,7 +17,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useCreateDelivery } from '@/hooks/use-create-delivery';
 import { useDraftOrder } from '@/hooks/use-draft-order';
-import { estimateFare, FARE, getRoute, haversineMeters } from '@/lib/geo';
+import { decodePolyline, estimateFare, FARE, getRoute, haversineMeters } from '@/lib/geo';
+
+import { RouteMap } from './route-map';
+
 
 const COLORS = {
   surface: '#ffffff',
@@ -50,9 +53,11 @@ export function QuoteSummary() {
   const router = useRouter();
   const [promo, setPromo] = useState('');
   const { createDelivery, submitting, error } = useCreateDelivery();
-  const { pickup, dropoff, size, weight } = useDraftOrder();
+  const { pickup, dropoff, size, weight, category, categoryDescription, specialInstructions } =
+    useDraftOrder();
 
   const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
+  const [routePoints, setRoutePoints] = useState<{ latitude: number; longitude: number }[]>([]);
   const [calculating, setCalculating] = useState(true);
 
   const hasRoute = !!pickup && !!dropoff;
@@ -74,8 +79,10 @@ export function QuoteSummary() {
           { lat: dropoff.lat, lng: dropoff.lng },
         );
         meters = route.distance_meters;
+        if (!cancelled) setRoutePoints(decodePolyline(route.polyline));
       } catch {
         meters = haversineMeters(pickup, dropoff);
+        if (!cancelled) setRoutePoints([]);
       }
       if (!cancelled) {
         setDistanceMeters(meters);
@@ -93,16 +100,29 @@ export function QuoteSummary() {
   const fareRows = useMemo<FareRow[]>(() => {
     if (km == null) return [];
     return [
-      { label: 'Base fare', value: `Rs ${FARE.base}` },
+      { label: 'Base fare', value: `₦${FARE.base}` },
       {
         label: `Distance (${km.toFixed(1)} km × ${FARE.perKm})`,
-        value: `Rs ${Math.round(km * FARE.perKm)}`,
+        value: `₦${Math.round(km * FARE.perKm)}`,
       },
-      { label: `Weight (${weight} kg × ${FARE.perKg})`, value: `Rs ${Math.round(weight * FARE.perKg)}` },
+      { label: `Weight (${weight} kg × ${FARE.perKg})`, value: `₦${Math.round(weight * FARE.perKg)}` },
     ];
   }, [km, weight]);
 
-  const priceLabel = price != null ? `Rs ${price}` : '—';
+  const priceLabel = price != null ? `₦${price}` : '—';
+
+  // Human-readable label for the package category chip.
+  const CATEGORY_LABELS: Record<string, string> = {
+    documents: 'Documents',
+    electronics: 'Electronics',
+    fragile: 'Fragile Items',
+    food: 'Food',
+    other: 'Other',
+  };
+  const packageLabel =
+    (category === 'other' && categoryDescription) ||
+    CATEGORY_LABELS[category] ||
+    'Package';
 
   const handleConfirm = async () => {
     if (submitting || !pickup || !dropoff || price == null) return;
@@ -115,6 +135,16 @@ export function QuoteSummary() {
       dropoff_lng: dropoff.lng,
       weight,
       price,
+      package_category: category || null,
+      package_description: categoryDescription || null,
+      package_size: size,
+      sender_name: pickup.contactName || null,
+      sender_phone: pickup.contactPhone || null,
+      recipient_name: dropoff.contactName || null,
+      recipient_phone: dropoff.contactPhone || null,
+      pickup_notes: pickup.notes || null,
+      dropoff_notes: dropoff.notes || null,
+      special_instructions: specialInstructions || null,
     });
     if (delivery) {
       router.push({ pathname: '/finding-rider', params: { deliveryId: delivery.id } });
@@ -143,19 +173,27 @@ export function QuoteSummary() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
         showsVerticalScrollIndicator={false}>
         {/* Map preview */}
-        <View style={styles.map}>
-          <Image source={{ uri: MAP_URI }} style={styles.mapImage} contentFit="cover" />
-          <View style={styles.mapMarkers} pointerEvents="none">
-            <View style={[styles.marker, styles.markerStart]} />
-            <View style={[styles.marker, styles.markerEnd]} />
+        {hasRoute && pickup && dropoff ? (
+          <RouteMap
+            pickup={{ lat: pickup.lat, lng: pickup.lng }}
+            dropoff={{ lat: dropoff.lat, lng: dropoff.lng }}
+            route={routePoints}
+          />
+        ) : (
+          <View style={styles.map}>
+            <Image source={{ uri: MAP_URI }} style={styles.mapImage} contentFit="cover" />
+            <View style={styles.mapMarkers} pointerEvents="none">
+              <View style={[styles.marker, styles.markerStart]} />
+              <View style={[styles.marker, styles.markerEnd]} />
+            </View>
           </View>
-        </View>
+        )}
 
         {/* Detail chips */}
         <View style={styles.chips}>
           <View style={styles.chip}>
             <MaterialIcons name="inventory-2" size={18} color={COLORS.primary} />
-            <Text style={styles.chipText}>Package</Text>
+            <Text style={styles.chipText}>{packageLabel}</Text>
           </View>
           <View style={styles.chip}>
             <Text style={styles.chipText}>{size.toUpperCase()} • {weight}kg</Text>

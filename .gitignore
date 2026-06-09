@@ -48,3 +48,6 @@ example
 *.pdf
 *.apk
 /Screenshot*.png
+
+# Claude MCP config (contains tokens)
+.mcp.json

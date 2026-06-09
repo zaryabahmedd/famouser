@@ -17,7 +17,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useCreateDelivery } from '@/hooks/use-create-delivery';
 import { useDraftOrder } from '@/hooks/use-draft-order';
+import { usePricing } from '@/hooks/use-pricing';
+import { base64ToBytes } from '@/lib/base64';
 import { decodePolyline, estimateFare, FARE, getRoute, haversineMeters } from '@/lib/geo';
+import { supabase } from '@/lib/supabase';
 
 import { RouteMap } from './route-map';
 
@@ -53,8 +56,26 @@ export function QuoteSummary() {
   const router = useRouter();
   const [promo, setPromo] = useState('');
   const { createDelivery, submitting, error } = useCreateDelivery();
-  const { pickup, dropoff, size, weight, category, categoryDescription, specialInstructions } =
-    useDraftOrder();
+  const { basePrice, perKmPrice } = usePricing();
+  const {
+    pickup,
+    dropoff,
+    size,
+    weight,
+    category,
+    categoryDescription,
+    specialInstructions,
+    paymentMethod,
+    paymentReceipt,
+  } = useDraftOrder();
+
+  const paymentLabel =
+    paymentMethod === 'bank'
+      ? 'Bank transfer'
+      : paymentMethod === 'cod'
+        ? 'Cash on delivery'
+        : 'Select payment method';
+  const paymentIconName = paymentMethod === 'bank' ? 'account-balance' : 'payments';
 
   const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
   const [routePoints, setRoutePoints] = useState<{ latitude: number; longitude: number }[]>([]);
@@ -95,19 +116,20 @@ export function QuoteSummary() {
   }, [pickup, dropoff]);
 
   const km = distanceMeters != null ? distanceMeters / 1000 : null;
-  const price = distanceMeters != null ? estimateFare(distanceMeters, weight) : null;
+  const price =
+    distanceMeters != null ? estimateFare(distanceMeters, weight, basePrice, perKmPrice) : null;
 
   const fareRows = useMemo<FareRow[]>(() => {
     if (km == null) return [];
     return [
-      { label: 'Base fare', value: `₦${FARE.base}` },
+      { label: 'Base fare', value: `₦${basePrice}` },
       {
-        label: `Distance (${km.toFixed(1)} km × ${FARE.perKm})`,
-        value: `₦${Math.round(km * FARE.perKm)}`,
+        label: `Distance (${km.toFixed(1)} km × ${perKmPrice})`,
+        value: `₦${Math.round(km * perKmPrice)}`,
       },
       { label: `Weight (${weight} kg × ${FARE.perKg})`, value: `₦${Math.round(weight * FARE.perKg)}` },
     ];
-  }, [km, weight]);
+  }, [km, weight, basePrice, perKmPrice]);
 
   const priceLabel = price != null ? `₦${price}` : '—';
 
@@ -126,6 +148,30 @@ export function QuoteSummary() {
 
   const handleConfirm = async () => {
     if (submitting || !pickup || !dropoff || price == null) return;
+
+    // Map the draft's UI-level choice to the DB's payment_method values, and
+    // upload the bank-transfer receipt (if any) to get a public proof-of-payment URL.
+    const paymentMethodForDb = paymentMethod === 'bank' ? 'bank_transfer' : 'cod';
+    let paymentScreenshotUrl: string | null = null;
+    if (paymentMethod === 'bank' && paymentReceipt) {
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth.user?.id;
+      if (userId) {
+        const ext = paymentReceipt.mimeType.includes('png') ? 'png' : 'jpg';
+        const path = `${userId}/receipts/receipt-${Date.now()}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from('payment-receipts')
+          .upload(path, base64ToBytes(paymentReceipt.base64), {
+            contentType: paymentReceipt.mimeType,
+            upsert: true,
+          });
+        if (!uploadError) {
+          const { data: pub } = supabase.storage.from('payment-receipts').getPublicUrl(path);
+          paymentScreenshotUrl = pub.publicUrl;
+        }
+      }
+    }
+
     const delivery = await createDelivery({
       pickup_address: pickup.address,
       pickup_lat: pickup.lat,
@@ -144,7 +190,12 @@ export function QuoteSummary() {
       recipient_phone: dropoff.contactPhone || null,
       pickup_notes: pickup.notes || null,
       dropoff_notes: dropoff.notes || null,
-      special_instructions: specialInstructions || null,
+      special_instructions:
+        [category === 'other' ? categoryDescription : null, specialInstructions]
+          .filter(Boolean)
+          .join('\n') || null,
+      payment_method: paymentMethodForDb,
+      payment_screenshot_url: paymentScreenshotUrl,
     });
     if (delivery) {
       router.push({ pathname: '/finding-rider', params: { deliveryId: delivery.id } });
@@ -269,9 +320,9 @@ export function QuoteSummary() {
           accessibilityRole="button">
           <View style={styles.paymentLeft}>
             <View style={styles.paymentIcon}>
-              <MaterialIcons name="credit-card" size={24} color={COLORS.onSurface} />
+              <MaterialIcons name={paymentIconName} size={24} color={COLORS.onSurface} />
             </View>
-            <Text style={styles.paymentText}>Visa •••• 4242</Text>
+            <Text style={styles.paymentText}>{paymentLabel}</Text>
           </View>
           <MaterialIcons name="chevron-right" size={24} color={COLORS.outline} />
         </Pressable>

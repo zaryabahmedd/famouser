@@ -34,9 +34,20 @@ type OtpVerificationProps = {
   onResend?: () => Promise<string | null> | void;
   onBack?: () => void;
   destination?: string;
+  stepLabel?: string;
+  progress?: number;
+  title?: string;
 };
 
-export function OtpVerification({ onVerify, onResend, onBack, destination }: OtpVerificationProps) {
+export function OtpVerification({
+  onVerify,
+  onResend,
+  onBack,
+  destination,
+  stepLabel = 'SIGN UP · STEP 2/2',
+  progress = 1,
+  title = 'Verify Your Email',
+}: OtpVerificationProps) {
   const insets = useSafeAreaInsets();
   const inputs = useRef<(TextInput | null)[]>([]);
   const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''));
@@ -107,9 +118,14 @@ export function OtpVerification({ onVerify, onResend, onBack, destination }: Otp
           <MaterialIcons name="chevron-left" size={26} color={COLORS.onSurface} />
         </Pressable>
         <View style={styles.stepWrap}>
-          <Text style={styles.stepText}>SIGN UP · STEP 2/2</Text>
+          <Text style={styles.stepText}>{stepLabel}</Text>
           <View style={styles.progressTrack}>
-            <View style={styles.progressFill} />
+            <View
+              style={[
+                styles.progressFill,
+                { width: `${Math.max(0, Math.min(1, progress)) * 100}%` },
+              ]}
+            />
           </View>
         </View>
       </View>
@@ -131,7 +147,7 @@ export function OtpVerification({ onVerify, onResend, onBack, destination }: Otp
           </View>
 
           <View style={styles.heading}>
-            <Text style={styles.title}>Verify Your Email</Text>
+            <Text style={styles.title}>{title}</Text>
             <Text style={styles.subtitle}>
               Enter the {OTP_LENGTH}-digit code we sent to{' '}
               <Text style={styles.dest}>{destination ?? 'your email'}</Text>.

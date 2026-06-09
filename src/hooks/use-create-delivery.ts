@@ -49,6 +49,8 @@ export function useCreateDelivery() {
           pickup_notes: input.pickup_notes ?? null,
           dropoff_notes: input.dropoff_notes ?? null,
           special_instructions: input.special_instructions ?? null,
+          payment_method: input.payment_method ?? null,
+          payment_screenshot_url: input.payment_screenshot_url ?? null,
         })
         .select()
         .single();

@@ -2,7 +2,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     Platform,
     Pressable,
@@ -16,11 +16,38 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomNav } from '@/components/bottom-nav';
 import { Sidebar } from '@/components/sidebar';
+import { useProfile } from '@/hooks/use-profile';
+import type { Delivery } from '@/lib/delivery-types';
+import { supabase } from '@/lib/supabase';
 
-const AVATAR_URI = 'https://randomuser.me/api/portraits/men/32.jpg';
+const AVATAR_FALLBACK = 'https://randomuser.me/api/portraits/lego/1.jpg';
 const RIDER_AVATAR_URI = 'https://randomuser.me/api/portraits/men/75.jpg';
 const BANNER_URI =
   'https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?auto=format&fit=crop&w=900&q=70';
+
+const ACTIVE_STATUSES = ['searching', 'accepted', 'picked_up'];
+
+function statusLabel(status: string): string {
+  switch (status) {
+    case 'searching':
+      return 'FINDING RIDER';
+    case 'accepted':
+      return 'RIDER ON THE WAY';
+    case 'picked_up':
+      return 'IN TRANSIT';
+    case 'delivered':
+      return 'DELIVERED';
+    case 'cancelled':
+      return 'CANCELLED';
+    default:
+      return status.toUpperCase();
+  }
+}
+
+type ActiveDelivery = Delivery & {
+  riderName?: string | null;
+  riderVehicle?: string | null;
+};
 
 const COLORS = {
   surface: '#ffffff',
@@ -85,6 +112,64 @@ export function Home() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { profile } = useProfile();
+  const [deliveryCards, setDeliveryCards] = useState<ActiveDelivery[]>([]);
+  const [showingActive, setShowingActive] = useState(true);
+
+  const avatarUri = profile?.avatar_url ?? AVATAR_FALLBACK;
+  const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id;
+      if (!userId) return;
+
+      const { data } = await supabase
+        .from('deliveries')
+        .select('*')
+        .eq('user_id', userId)
+        .in('status', ACTIVE_STATUSES)
+        .order('created_at', { ascending: false });
+      if (!active) return;
+
+      let list = (data as Delivery[]) ?? [];
+      let isActiveSet = true;
+
+      if (list.length === 0) {
+        const { data: completedData } = await supabase
+          .from('deliveries')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('status', 'delivered')
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (!active) return;
+        list = (completedData as Delivery[]) ?? [];
+        isActiveSet = false;
+      }
+
+      const withRiders = await Promise.all(
+        list.map(async (d): Promise<ActiveDelivery> => {
+          if (!d.rider_id) return { ...d };
+          const { data: riderData } = await supabase
+            .from('riders')
+            .select('full_name, vehicle_type')
+            .eq('id', d.rider_id)
+            .single();
+          return { ...d, riderName: riderData?.full_name, riderVehicle: riderData?.vehicle_type };
+        }),
+      );
+      if (active) {
+        setDeliveryCards(withRiders);
+        setShowingActive(isActiveSet);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <View style={styles.root}>
@@ -108,10 +193,10 @@ export function Home() {
             style={styles.avatarRing}
             accessibilityRole="button"
             accessibilityLabel="Open menu">
-            <Image source={{ uri: AVATAR_URI }} style={styles.avatar} contentFit="cover" />
+            <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" />
           </Pressable>
           <View>
-            <Text style={styles.greeting}>Hello, Ahmed</Text>
+            <Text style={styles.greeting}>Hello, {firstName}</Text>
             <Text style={styles.greetingSub}>Where shall we deliver today?</Text>
           </View>
         </View>
@@ -130,7 +215,7 @@ export function Home() {
         showsVerticalScrollIndicator={false}>
         {/* Search */}
         <Pressable
-          onPress={() => router.push('/address-picker')}
+          onPress={() => router.push('/schedule')}
           style={styles.search}
           accessibilityRole="button"
           accessibilityLabel="Set delivery destination">
@@ -165,39 +250,59 @@ export function Home() {
           ))}
         </View>
 
-        {/* Active delivery */}
-        <View style={styles.delivery}>
-          <View style={styles.deliveryTop}>
-            <Text style={styles.badge}>IN TRANSIT</Text>
-            <Text style={styles.eta}>
-              ETA <Text style={styles.etaBold}>14 min</Text>
-            </Text>
-          </View>
-          <View style={styles.deliveryRow}>
-            <View style={styles.deliveryLeft}>
-              <View style={styles.courierRing}>
-                <Image
-                  source={{ uri: RIDER_AVATAR_URI }}
-                  style={styles.courierAvatar}
-                  contentFit="cover"
-                />
-                <View style={styles.courierBadge}>
-                  <Text style={styles.courierBadgeText}>R</Text>
+        {/* Active deliveries (or, when there are none, the most recent completed one) */}
+        {deliveryCards.length > 0 && (
+          <View style={styles.deliveryList}>
+            {!showingActive && <Text style={styles.sectionLabel}>Last delivery</Text>}
+            {deliveryCards.map((order) => {
+              const isActiveOrder = ACTIVE_STATUSES.includes(order.status);
+              return (
+                <View key={order.id} style={styles.delivery}>
+                  <View style={styles.deliveryTop}>
+                    <Text style={styles.badge}>{statusLabel(order.status)}</Text>
+                  </View>
+                  <View style={styles.deliveryRow}>
+                    <View style={styles.deliveryLeft}>
+                      <View style={styles.courierRing}>
+                        <Image
+                          source={{ uri: RIDER_AVATAR_URI }}
+                          style={styles.courierAvatar}
+                          contentFit="cover"
+                        />
+                        <View style={styles.courierBadge}>
+                          <Text style={styles.courierBadgeText}>R</Text>
+                        </View>
+                      </View>
+                      <View style={styles.deliveryInfo}>
+                        <Text style={styles.deliveryTitle} numberOfLines={1}>
+                          {order.pickup_address ?? 'Pickup'} → {order.dropoff_address ?? 'Drop-off'}
+                        </Text>
+                        <Text style={styles.deliverySub} numberOfLines={1}>
+                          {order.riderName
+                            ? [order.riderName, order.riderVehicle].filter(Boolean).join(' · ')
+                            : isActiveOrder
+                              ? 'Looking for a rider…'
+                              : 'No rider assigned'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Pressable
+                      onPress={() =>
+                        router.push({
+                          pathname: isActiveOrder ? '/live-tracking' : '/order-details',
+                          params: { deliveryId: order.id },
+                        })
+                      }
+                      style={({ pressed }) => [styles.trackBtn, pressed && styles.trackBtnPressed]}
+                      accessibilityRole="button">
+                      <Text style={styles.trackBtnText}>{isActiveOrder ? 'Track' : 'Details'}</Text>
+                    </Pressable>
+                  </View>
                 </View>
-              </View>
-              <View style={styles.deliveryInfo}>
-                <Text style={styles.deliveryTitle}>DHA Phase 5 → Gulberg</Text>
-                <Text style={styles.deliverySub}>Rashid · Electric Scooter · 4.9★</Text>
-              </View>
-            </View>
-            <Pressable
-              onPress={() => router.push('/live-tracking')}
-              style={({ pressed }) => [styles.trackBtn, pressed && styles.trackBtnPressed]}
-              accessibilityRole="button">
-              <Text style={styles.trackBtnText}>Track</Text>
-            </Pressable>
+              );
+            })}
           </View>
-        </View>
+        )}
 
         {/* Promo banner */}
         <View style={styles.promo}>
@@ -375,6 +480,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.onSurfaceVariant,
   },
+  deliveryList: {
+    gap: 16,
+  },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    color: COLORS.onSurfaceVariant,
+  },
   delivery: {
     backgroundColor: '#ffffff',
     borderWidth: 1,
@@ -406,14 +521,6 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 4,
     overflow: 'hidden',
-  },
-  eta: {
-    fontSize: 14,
-    color: COLORS.onSurface,
-  },
-  etaBold: {
-    fontWeight: '700',
-    color: COLORS.onSurface,
   },
   deliveryRow: {
     flexDirection: 'row',

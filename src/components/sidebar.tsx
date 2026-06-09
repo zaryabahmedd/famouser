@@ -1,4 +1,5 @@
 import { useAuth } from '@/hooks/use-auth';
+import { useProfile } from '@/hooks/use-profile';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -17,7 +18,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const AVATAR_URI = 'https://randomuser.me/api/portraits/men/32.jpg';
+const AVATAR_FALLBACK = 'https://randomuser.me/api/portraits/lego/1.jpg';
 
 const COLORS = {
   surface: '#ffffff',
@@ -41,11 +42,7 @@ type Route =
   | '/orders'
   | '/track-package'
   | '/instant-quote'
-  | '/wallet'
-  | '/payment-methods'
-  | '/notifications'
   | '/profile'
-  | '/saved-addresses'
   | '/settings'
   | '/help-support';
 
@@ -62,8 +59,6 @@ const ITEMS: DrawerItem[] = [
   { key: 'orders', icon: 'inventory-2', label: 'My Orders', route: '/orders' },
   { key: 'track', icon: 'local-shipping', label: 'Track Package', route: '/track-package' },
   { key: 'quote', icon: 'request-quote', label: 'Get a Quote', route: '/instant-quote' },
-  { key: 'wallet', icon: 'account-balance-wallet', label: 'Payments', route: '/wallet' },
-  { key: 'notifications', icon: 'notifications', label: 'Notifications', route: '/notifications' },
   { key: 'profile', icon: 'person', label: 'My Profile', route: '/profile' },
   { key: 'settings', icon: 'settings', label: 'Settings', route: '/settings' },
 ];
@@ -77,7 +72,11 @@ export function Sidebar({ visible, onClose }: SidebarProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { logout } = useAuth();
+  const { profile } = useProfile();
   const { width } = useWindowDimensions();
+
+  const avatarUri = profile?.avatar_url ?? AVATAR_FALLBACK;
+  const displayName = profile?.full_name ?? 'Customer';
   const drawerWidth = Math.min(320, width * 0.85);
 
   const translateX = useRef(new Animated.Value(-drawerWidth)).current;
@@ -151,11 +150,11 @@ export function Sidebar({ visible, onClose }: SidebarProps) {
             {/* Profile */}
             <View style={styles.profile}>
               <View style={styles.avatarWrap}>
-                <Image source={{ uri: AVATAR_URI }} style={styles.avatar} contentFit="cover" />
+                <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" />
                 <View style={styles.onlineDot} />
               </View>
               <View style={styles.profileInfo}>
-                <Text style={styles.name}>Ahmed Khan</Text>
+                <Text style={styles.name}>{displayName}</Text>
                 <View style={styles.ratingRow}>
                   <MaterialIcons name="verified" size={16} color={COLORS.primary} />
                   <Text style={styles.ratingText}>Verified Customer</Text>

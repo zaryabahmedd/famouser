@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
+    Linking,
     Platform,
     Pressable,
     ScrollView,
@@ -38,45 +39,60 @@ type Action = {
 };
 
 const ACTIONS: Action[] = [
-  { key: 'chat', icon: 'chat', title: 'Live Chat', subtitle: 'Typically replies in 2 min' },
-  { key: 'call', icon: 'call', title: 'Call Support', subtitle: 'Mon–Sun · 8am–10pm' },
-  { key: 'email', icon: 'mail', title: 'Email Us', subtitle: 'support@famo.app' },
+  { key: 'call', icon: 'call', title: 'Call Support', subtitle: '+2347026285252' },
+  { key: 'email', icon: 'mail', title: 'Email Us', subtitle: 'Support@fastmotionlogistics.com.ng' },
 ];
+
+type Topic = 'Orders' | 'Payments' | 'Tracking' | 'Account' | 'Refunds';
 
 type Faq = {
   q: string;
   a: string;
+  topic: Topic;
 };
 
 const FAQS: Faq[] = [
   {
-    q: 'How do I track my delivery?',
-    a: 'Open the order from Home or the Orders tab and tap “Track” to see your rider live on the map with real-time ETA updates.',
-  },
-  {
     q: 'How is the delivery price calculated?',
     a: 'Pricing is based on distance, package size and weight, and the vehicle type. You always see the full quote before you confirm and pay.',
+    topic: 'Orders',
   },
   {
     q: 'Can I cancel a delivery?',
     a: 'Yes. You can cancel before a rider picks up the package from the tracking screen. Cancellation fees may apply once a rider is assigned.',
+    topic: 'Orders',
   },
   {
     q: 'What payment methods are supported?',
-    a: 'We accept Visa, Mastercard, JazzCash and cash on delivery. You can manage your cards under Payment Methods in your profile.',
+    a: 'We accept cash on delivery and card payments at checkout.',
+    topic: 'Payments',
+  },
+  {
+    q: 'How do I track my delivery?',
+    a: 'Open the order from Home or the Orders tab and tap “Track” to see your rider live on the map with real-time ETA updates.',
+    topic: 'Tracking',
+  },
+  {
+    q: 'How do I update my account details?',
+    a: 'Open your profile and tap “Edit profile” to update your name and photo. Language and currency preferences are under Settings.',
+    topic: 'Account',
   },
   {
     q: 'My package arrived damaged. What do I do?',
     a: 'Report the issue from the order receipt within 48 hours. Our support team will review and resolve eligible claims quickly.',
+    topic: 'Refunds',
   },
 ];
 
-const TOPICS = ['Orders', 'Payments', 'Tracking', 'Account', 'Refunds'];
+const TOPICS: Topic[] = ['Orders', 'Payments', 'Tracking', 'Account', 'Refunds'];
 
 export function HelpSupport() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [open, setOpen] = useState<number | null>(0);
+  const [activeTopic, setActiveTopic] = useState<Topic | null>(null);
+
+  const filteredFaqs = activeTopic ? FAQS.filter((f) => f.topic === activeTopic) : FAQS;
 
   return (
     <View style={styles.root}>
@@ -116,8 +132,8 @@ export function HelpSupport() {
             <Pressable
               key={a.key}
               onPress={() => {
-                if (a.key === 'chat') router.push('/chat');
-                else if (a.key === 'call') router.push('/call');
+                if (a.key === 'call') Linking.openURL('tel:+2347026285252');
+                else if (a.key === 'email') Linking.openURL('mailto:Support@fastmotionlogistics.com.ng');
               }}
               style={({ pressed }) => [styles.actionCard, pressed && styles.cardPressed]}
               accessibilityRole="button">
@@ -136,21 +152,34 @@ export function HelpSupport() {
         {/* Topics */}
         <Text style={styles.sectionTitle}>Browse topics</Text>
         <View style={styles.topics}>
-          {TOPICS.map((t) => (
-            <Pressable
-              key={t}
-              onPress={() => router.push('/chat')}
-              style={({ pressed }) => [styles.topic, pressed && styles.cardPressed]}
-              accessibilityRole="button">
-              <Text style={styles.topicText}>{t}</Text>
-            </Pressable>
-          ))}
+          {TOPICS.map((t) => {
+            const isActive = activeTopic === t;
+            return (
+              <Pressable
+                key={t}
+                onPress={() => {
+                  setActiveTopic(isActive ? null : t);
+                  setOpen(null);
+                }}
+                style={({ pressed }) => [
+                  styles.topic,
+                  isActive && styles.topicActive,
+                  pressed && styles.cardPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}>
+                <Text style={[styles.topicText, isActive && styles.topicTextActive]}>{t}</Text>
+              </Pressable>
+            );
+          })}
         </View>
 
         {/* FAQ */}
-        <Text style={styles.sectionTitle}>Frequently asked</Text>
+        <Text style={styles.sectionTitle}>
+          {activeTopic ? `Frequently asked · ${activeTopic}` : 'Frequently asked'}
+        </Text>
         <View style={styles.faqList}>
-          {FAQS.map((f, i) => {
+          {filteredFaqs.map((f, i) => {
             const isOpen = open === i;
             return (
               <Pressable
@@ -296,6 +325,13 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surfaceContainerLow,
     borderWidth: 1,
     borderColor: COLORS.outlineVariant,
+  },
+  topicActive: {
+    backgroundColor: COLORS.primaryContainer,
+    borderColor: COLORS.primary,
+  },
+  topicTextActive: {
+    color: COLORS.onPrimaryContainer,
   },
   topicText: {
     fontSize: 14,

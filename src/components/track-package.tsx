@@ -1,8 +1,10 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+    ActivityIndicator,
+    Alert,
     Platform,
     Pressable,
     ScrollView,
@@ -12,6 +14,9 @@ import {
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import type { Delivery } from '@/lib/delivery-types';
+import { supabase } from '@/lib/supabase';
 
 const COLORS = {
   surface: '#ffffff',
@@ -24,66 +29,113 @@ const COLORS = {
   outlineVariant: '#cec6ad',
   primary: '#6d5e00',
   primaryContainer: '#fde047',
-  primaryFixed: '#ffe24c',
   onPrimaryContainer: '#726300',
 };
 
-type Delivery = {
-  key: string;
-  icon: keyof typeof MaterialIcons.glyphMap;
-  status: string;
-  statusBg: string;
-  statusColor: string;
-  trackingId: string;
-  from: string;
-  to: string;
-  meta: string;
-  progress: number;
-};
+const ACTIVE_STATUSES = ['searching', 'accepted', 'picked_up'];
 
-const DELIVERIES: Delivery[] = [
-  {
-    key: 'd1',
-    icon: 'inventory-2',
-    status: 'In transit',
-    statusBg: '#f3e8ff',
-    statusColor: '#6b21a8',
-    trackingId: 'FAMO-94821',
-    from: 'DHA Phase 5',
-    to: 'Gulberg III',
-    meta: 'Rashid · ETA 14 min',
-    progress: 0.75,
-  },
-  {
-    key: 'd2',
-    icon: 'inventory',
-    status: 'Picked up',
-    statusBg: '#e0e0e0',
-    statusColor: '#616363',
-    trackingId: 'FAMO-94815',
-    from: 'Lekki Phase 1',
-    to: 'Ikeja City Mall',
-    meta: 'Faisal · Picked up',
-    progress: 0.25,
-  },
-  {
-    key: 'd3',
-    icon: 'calendar-today',
-    status: 'Scheduled',
-    statusBg: '#e0e7ff',
-    statusColor: '#3730a3',
-    trackingId: 'FAMO-94800',
-    from: 'Victoria Island',
-    to: 'Surulere',
-    meta: 'Tomorrow · 9:00 AM',
-    progress: 0,
-  },
-];
+function orderCode(id: string): string {
+  return `FAMO-${id.replace(/-/g, '').slice(-5).toUpperCase()}`;
+}
+
+function getStatusDisplay(status: string) {
+  switch (status) {
+    case 'searching':
+      return { label: 'Finding rider', bg: '#E9E1FF', color: '#6750A4' };
+    case 'accepted':
+      return { label: 'Rider on way', bg: '#E1F5FE', color: '#01579B' };
+    case 'picked_up':
+      return { label: 'In transit', bg: '#f3e8ff', color: '#6b21a8' };
+    default:
+      return { label: status, bg: COLORS.surfaceContainer, color: COLORS.onSurfaceVariant };
+  }
+}
+
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const yest = new Date();
+  yest.setDate(now.getDate() - 1);
+  const t = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  if (d.toDateString() === now.toDateString()) return `Today · ${t}`;
+  if (d.toDateString() === yest.toDateString()) return `Yesterday · ${t}`;
+  return `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · ${t}`;
+}
+
+// Extract the 5-character code suffix from user input, tolerating the
+// "FAMO-" prefix, lowercase, dashes, and stray whitespace.
+function parseTrackingCode(input: string): string | null {
+  const cleaned = input.trim().toUpperCase().replace(/^FAMO-?/, '').replace(/[^0-9A-F]/g, '');
+  if (cleaned.length < 5) return null;
+  return cleaned.slice(-5).toLowerCase();
+}
 
 export function TrackPackage() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [trackingId, setTrackingId] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id;
+      if (!userId) {
+        setLoading(false);
+        return;
+      }
+      const { data } = await supabase
+        .from('deliveries')
+        .select('*')
+        .eq('user_id', userId)
+        .in('status', ACTIVE_STATUSES)
+        .order('created_at', { ascending: false });
+      if (active) {
+        setDeliveries((data as Delivery[]) ?? []);
+        setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleTrack = async () => {
+    const suffix = parseTrackingCode(trackingId);
+    if (!suffix) {
+      Alert.alert('Invalid tracking number', 'Enter a code like FAMO-549BF.');
+      return;
+    }
+
+    setSearching(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id;
+      if (!userId) return;
+
+      // `id` is a Postgres `uuid` column, so pattern-matching it on the server
+      // (e.g. ilike) fails without an explicit cast. Fetch the user's orders
+      // and match the code suffix client-side using the same logic that
+      // generates the displayed FAMO-XXXXX code.
+      const { data } = await supabase.from('deliveries').select('id, status').eq('user_id', userId);
+
+      const match = (data ?? []).find(
+        (d) => d.id.replace(/-/g, '').slice(-5).toLowerCase() === suffix,
+      );
+
+      if (!match) {
+        Alert.alert('Not found', `No order matches tracking number FAMO-${suffix.toUpperCase()}.`);
+        return;
+      }
+
+      router.push({ pathname: '/order-details', params: { deliveryId: match.id } });
+    } finally {
+      setSearching(false);
+    }
+  };
 
   return (
     <View style={styles.root}>
@@ -121,66 +173,86 @@ export function TrackPackage() {
             <TextInput
               value={trackingId}
               onChangeText={setTrackingId}
-              placeholder="Enter tracking ID"
+              placeholder="e.g. FAMO-549BF"
               placeholderTextColor={COLORS.outline}
               style={styles.searchInput}
               autoCapitalize="characters"
+              autoCorrect={false}
             />
           </View>
           <Pressable
-            onPress={() => router.push('/live-tracking')}
-            style={({ pressed }) => [styles.trackBtn, pressed && styles.trackBtnPressed]}
+            onPress={handleTrack}
+            disabled={searching}
+            style={({ pressed }) => [
+              styles.trackBtn,
+              pressed && styles.trackBtnPressed,
+              searching && styles.trackBtnDisabled,
+            ]}
             accessibilityRole="button">
-            <Text style={styles.trackBtnText}>Track</Text>
+            {searching ? (
+              <ActivityIndicator color={COLORS.onPrimaryContainer} />
+            ) : (
+              <Text style={styles.trackBtnText}>Track</Text>
+            )}
           </Pressable>
         </View>
 
         {/* Active deliveries */}
         <Text style={styles.sectionHeading}>ACTIVE DELIVERIES</Text>
-        <View style={styles.list}>
-          {DELIVERIES.map((d) => (
-            <Pressable
-              key={d.key}
-              onPress={() => router.push('/live-tracking')}
-              style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-              accessibilityRole="button">
-              <View style={styles.cardTop}>
-                <View style={styles.cardIcon}>
-                  <MaterialIcons name={d.icon} size={20} color={COLORS.onSurfaceVariant} />
-                </View>
-                <View style={styles.cardTopText}>
-                  <Text style={styles.cardTracking}>{d.trackingId}</Text>
-                  <Text style={styles.cardMeta} numberOfLines={1}>
-                    {d.meta}
-                  </Text>
-                </View>
-                <View style={[styles.statusBadge, { backgroundColor: d.statusBg }]}>
-                  <Text style={[styles.statusText, { color: d.statusColor }]}>{d.status}</Text>
-                </View>
-              </View>
+        {loading ? (
+          <ActivityIndicator style={styles.loader} color={COLORS.primary} />
+        ) : deliveries.length === 0 ? (
+          <View style={styles.empty}>
+            <MaterialIcons name="local-shipping" size={40} color={COLORS.outlineVariant} />
+            <Text style={styles.emptyText}>No active deliveries right now</Text>
+          </View>
+        ) : (
+          <View style={styles.list}>
+            {deliveries.map((d) => {
+              const status = getStatusDisplay(d.status);
+              return (
+                <Pressable
+                  key={d.id}
+                  onPress={() =>
+                    router.push({ pathname: '/live-tracking', params: { deliveryId: d.id } })
+                  }
+                  style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+                  accessibilityRole="button">
+                  <View style={styles.cardTop}>
+                    <View style={styles.cardIcon}>
+                      <MaterialIcons name="inventory-2" size={20} color={COLORS.onSurfaceVariant} />
+                    </View>
+                    <View style={styles.cardTopText}>
+                      <Text style={styles.cardTracking}>{orderCode(d.id)}</Text>
+                      <Text style={styles.cardMeta} numberOfLines={1}>
+                        {formatTime(d.created_at)}
+                      </Text>
+                    </View>
+                    <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
+                      <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
+                    </View>
+                  </View>
 
-              <View style={styles.routeRow}>
-                <View style={styles.routeDots}>
-                  <View style={styles.dotOrigin} />
-                  <View style={styles.routeLine} />
-                  <MaterialIcons name="place" size={14} color={COLORS.onSurface} />
-                </View>
-                <View style={styles.routeText}>
-                  <Text style={styles.routePoint} numberOfLines={1}>
-                    {d.from}
-                  </Text>
-                  <Text style={styles.routePoint} numberOfLines={1}>
-                    {d.to}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.progressTrack}>
-                <View style={[styles.progressFill, { width: `${d.progress * 100}%` }]} />
-              </View>
-            </Pressable>
-          ))}
-        </View>
+                  <View style={styles.routeRow}>
+                    <View style={styles.routeDots}>
+                      <View style={styles.dotOrigin} />
+                      <View style={styles.routeLine} />
+                      <MaterialIcons name="place" size={14} color={COLORS.onSurface} />
+                    </View>
+                    <View style={styles.routeText}>
+                      <Text style={styles.routePoint} numberOfLines={1}>
+                        {d.pickup_address ?? 'Pickup location'}
+                      </Text>
+                      <Text style={styles.routePoint} numberOfLines={1}>
+                        {d.dropoff_address ?? 'Drop-off location'}
+                      </Text>
+                    </View>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -262,6 +334,9 @@ const styles = StyleSheet.create({
   trackBtnPressed: {
     transform: [{ scale: 0.98 }],
   },
+  trackBtnDisabled: {
+    opacity: 0.7,
+  },
   trackBtnText: {
     fontSize: 14,
     fontWeight: '700',
@@ -274,6 +349,19 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     color: COLORS.onSurfaceVariant,
     marginBottom: 14,
+  },
+  loader: {
+    marginTop: 32,
+  },
+  empty: {
+    alignItems: 'center',
+    paddingVertical: 48,
+    gap: 12,
+  },
+  emptyText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: COLORS.onSurfaceVariant,
   },
   list: {
     gap: 12,
@@ -356,16 +444,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.onSurface,
-  },
-  progressTrack: {
-    height: 4,
-    borderRadius: 999,
-    backgroundColor: COLORS.surfaceContainer,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 999,
-    backgroundColor: COLORS.primaryFixed,
   },
 });

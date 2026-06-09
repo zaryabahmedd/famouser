@@ -16,7 +16,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { GoogleIcon } from '@/components/google-icon';
 
 const COLORS = {
   background: '#fbf9f9',
@@ -279,19 +278,6 @@ export function SignUp({ onContinue, onBack, onLogIn }: SignUpProps) {
 
           {/* Footer */}
           <View style={styles.footer}>
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>OR</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <Pressable
-              style={({ pressed }) => [styles.google, pressed && styles.googlePressed]}
-              accessibilityRole="button">
-              <GoogleIcon size={20} />
-              <Text style={styles.googleText}>Continue with Google</Text>
-            </Pressable>
-
             <Text style={styles.loginRow}>
               Already have an account?{' '}
               <Text style={styles.loginLink} onPress={onLogIn}>
@@ -481,41 +467,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 14,
     marginTop: 18,
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    width: '100%',
-  },
-  dividerLine: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(208, 198, 171, 0.5)',
-  },
-  dividerText: {
-    fontSize: 13,
-    color: COLORS.onSurfaceVariant,
-  },
-  google: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    width: '100%',
-    paddingVertical: 13,
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant,
-    borderRadius: 14,
-    backgroundColor: COLORS.surfaceLowest,
-  },
-  googlePressed: {
-    backgroundColor: '#efeded',
-  },
-  googleText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.onSurface,
   },
   loginRow: {
     fontSize: 15,

@@ -123,7 +123,7 @@ export function RiderAssigned() {
             <MaterialIcons name="call" size={24} color={COLORS.onSurface} />
           </Pressable>
           <Pressable
-            onPress={() => router.push('/chat')}
+            onPress={() => router.push({ pathname: '/chat', params: { deliveryId: deliveryId ?? '' } })}
             style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
             accessibilityRole="button"
             accessibilityLabel="Message rider">

@@ -1,8 +1,8 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
     KeyboardAvoidingView,
     Platform,
@@ -15,7 +15,16 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { markChatRead } from '@/hooks/use-chat-unread';
+import { useDeliveryChat } from '@/hooks/use-delivery-chat';
+import { useDeliveryStatus } from '@/hooks/use-delivery-status';
+import { supabase } from '@/lib/supabase';
+
 const AVATAR_URI = 'https://randomuser.me/api/portraits/men/75.jpg';
+
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
 
 const COLORS = {
   surface: '#ffffff',
@@ -33,35 +42,51 @@ const COLORS = {
   onPrimaryFixed: '#211b00',
 };
 
-type Message = {
-  id: string;
-  text: string;
-  mine: boolean;
-  time: string;
-};
-
-const INITIAL: Message[] = [
-  { id: 'm1', text: 'Hi! I’ve picked up your package and I’m on the way.', mine: false, time: '10:22' },
-  { id: 'm2', text: 'Great, thank you! How long until you arrive?', mine: true, time: '10:23' },
-  { id: 'm3', text: 'About 12 minutes. There’s a bit of traffic on the main road.', mine: false, time: '10:23' },
-  { id: 'm4', text: 'No problem. Please call when you reach the gate.', mine: true, time: '10:24' },
-];
-
 const QUICK = ['On my way!', 'Please wait', 'Call me', 'Thank you'];
+
+type RiderInfo = { full_name: string | null };
 
 export function Chat() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [messages, setMessages] = useState<Message[]>(INITIAL);
+  const params = useLocalSearchParams<{ deliveryId?: string }>();
+  const deliveryId = typeof params.deliveryId === 'string' && params.deliveryId ? params.deliveryId : null;
+
+  const { delivery } = useDeliveryStatus(deliveryId);
+  const { messages, sendMessage } = useDeliveryChat(deliveryId);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [rider, setRider] = useState<RiderInfo | null>(null);
   const [draft, setDraft] = useState('');
+  const scrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
+  }, []);
+
+  // Clear the unread badge while the chat is open and as new messages arrive.
+  useEffect(() => {
+    if (deliveryId) markChatRead(deliveryId);
+  }, [deliveryId, messages.length]);
+
+  useEffect(() => {
+    if (!delivery?.rider_id) return;
+    let active = true;
+    supabase
+      .from('riders')
+      .select('full_name')
+      .eq('id', delivery.rider_id)
+      .single()
+      .then(({ data }) => {
+        if (active && data) setRider(data as RiderInfo);
+      });
+    return () => {
+      active = false;
+    };
+  }, [delivery?.rider_id]);
 
   const send = (text: string) => {
-    const value = text.trim();
-    if (!value) return;
-    setMessages((prev) => [
-      ...prev,
-      { id: String(Date.now()), text: value, mine: true, time: '10:25' },
-    ]);
+    if (!text.trim()) return;
+    sendMessage(text);
     setDraft('');
   };
 
@@ -84,7 +109,7 @@ export function Chat() {
         <View style={styles.headerInfo}>
           <Image source={{ uri: AVATAR_URI }} style={styles.headerAvatar} contentFit="cover" />
           <View>
-            <Text style={styles.headerName}>Rashid Ahmed</Text>
+            <Text style={styles.headerName}>{rider?.full_name ?? 'Your rider'}</Text>
             <Text style={styles.headerStatus}>Online · Your rider</Text>
           </View>
         </View>
@@ -99,24 +124,33 @@ export function Chat() {
       </View>
 
       <ScrollView
+        ref={scrollRef}
+        style={styles.messagesScroll}
         contentContainerStyle={styles.messages}
+        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
         showsVerticalScrollIndicator={false}>
         <Text style={styles.daySep}>Today</Text>
-        {messages.map((m) => (
-          <View
-            key={m.id}
-            style={[styles.bubbleRow, m.mine ? styles.bubbleRowMine : styles.bubbleRowTheirs]}>
-            <View style={[styles.bubble, m.mine ? styles.bubbleMine : styles.bubbleTheirs]}>
-              <Text style={[styles.bubbleText, m.mine && styles.bubbleTextMine]}>{m.text}</Text>
-              <Text style={[styles.bubbleTime, m.mine && styles.bubbleTimeMine]}>{m.time}</Text>
+        {messages.map((m) => {
+          const mine = m.sender_role === 'user' && m.sender_id === userId;
+          return (
+            <View
+              key={m.id}
+              style={[styles.bubbleRow, mine ? styles.bubbleRowMine : styles.bubbleRowTheirs]}>
+              <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
+                <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{m.body}</Text>
+                <Text style={[styles.bubbleTime, mine && styles.bubbleTimeMine]}>
+                  {formatTime(m.created_at)}
+                </Text>
+              </View>
             </View>
-          </View>
-        ))}
+          );
+        })}
       </ScrollView>
 
       {/* Quick replies */}
       <ScrollView
         horizontal
+        style={styles.quickScroll}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.quickRow}>
         {QUICK.map((q) => (
@@ -200,6 +234,9 @@ const styles = StyleSheet.create({
     color: COLORS.secondary,
     marginTop: 1,
   },
+  messagesScroll: {
+    flex: 1,
+  },
   messages: {
     paddingHorizontal: 16,
     paddingVertical: 16,
@@ -251,6 +288,10 @@ const styles = StyleSheet.create({
   },
   bubbleTimeMine: {
     color: 'rgba(33, 27, 0, 0.6)',
+  },
+  quickScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
   },
   quickRow: {
     paddingHorizontal: 16,

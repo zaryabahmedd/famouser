@@ -16,7 +16,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { usePlaceSearch } from '@/hooks/use-place-search';
-import { FARE, getRoute, haversineMeters, type PlaceLocation, type PlacePrediction } from '@/lib/geo';
+import { usePricing } from '@/hooks/use-pricing';
+import { getRoute, haversineMeters, type PlaceLocation, type PlacePrediction } from '@/lib/geo';
 
 const COLORS = {
   surface: '#ffffff',
@@ -55,6 +56,7 @@ export function InstantQuote() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [size, setSize] = useState('M');
+  const { perKmPrice } = usePricing();
 
   // Real Google Places autocomplete for the two location fields.
   const pickupSearch = usePlaceSearch();
@@ -116,8 +118,8 @@ export function InstantQuote() {
   };
 
   const km = distanceMeters != null ? distanceMeters / 1000 : null;
-  // Estimated total billed at a flat ₦180 per kilometre.
-  const total = km != null ? Math.round(km * FARE.perKm) : null;
+  // Estimated total billed at the live per-kilometre rate from pricing_settings.
+  const total = km != null ? Math.round(km * perKmPrice) : null;
 
   return (
     <View style={styles.root}>

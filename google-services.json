@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "41432009097",
+    "project_id": "famo-rider",
+    "storage_bucket": "famo-rider.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:41432009097:android:bfc9cee67acee8efed7958",
+        "android_client_info": {
+          "package_name": "com.famo.rider"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyChPFYwwCXnUGe8YH1Ydzu4ee-efYJWPdg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:41432009097:android:6d5828b44b878a67ed7958",
+        "android_client_info": {
+          "package_name": "com.famo.user"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyChPFYwwCXnUGe8YH1Ydzu4ee-efYJWPdg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

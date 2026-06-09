@@ -35,7 +35,7 @@ const COLORS = {
   error: '#ba1a1a',
 };
 
-type Route = '/orders' | '/payment-methods' | '/notifications' | '/saved-addresses' | '/edit-profile' | '/help-support' | '/wallet' | '/settings';
+type Route = '/orders' | '/edit-profile' | '/help-support' | '/settings';
 
 type MenuItem = {
   key: string;
@@ -46,10 +46,6 @@ type MenuItem = {
 
 const MENU: MenuItem[] = [
   { key: 'orders', icon: 'inventory-2', label: 'My Orders', route: '/orders' },
-  { key: 'addresses', icon: 'location-on', label: 'Saved Addresses', route: '/saved-addresses' },
-  { key: 'wallet', icon: 'account-balance-wallet', label: 'Wallet', route: '/wallet' },
-  { key: 'payments', icon: 'credit-card', label: 'Payment Methods', route: '/payment-methods' },
-  { key: 'notifications', icon: 'notifications-active', label: 'Notifications', route: '/notifications' },
   { key: 'settings', icon: 'settings', label: 'Settings', route: '/settings' },
   { key: 'support', icon: 'contact-support', label: 'Help & support', route: '/help-support' },
 ];

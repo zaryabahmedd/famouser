@@ -293,18 +293,22 @@ export function decodePolyline(encoded: string | null | undefined): { latitude: 
 // ---- Fare estimate ----------------------------------------------------------
 
 export const FARE = {
-  base: 150, // flat base fare
-  perKm: 180, // per kilometer
   perKg: 10, // per kilogram
 };
 
 /**
- * Compute a fare estimate from the route distance and package weight.
- * Returns a whole-number price in the app's currency.
+ * Compute a fare estimate from the route distance and package weight, using
+ * the live base/per-km prices from the admin-managed `pricing_settings` table
+ * (see `usePricing`). Returns a whole-number price in the app's currency.
  */
-export function estimateFare(distanceMeters: number, weightKg: number): number {
+export function estimateFare(
+  distanceMeters: number,
+  weightKg: number,
+  basePrice: number,
+  perKmPrice: number,
+): number {
   const km = distanceMeters / 1000;
-  const price = FARE.base + km * FARE.perKm + weightKg * FARE.perKg;
+  const price = basePrice + km * perKmPrice + weightKg * FARE.perKg;
   return Math.round(price);
 }
 

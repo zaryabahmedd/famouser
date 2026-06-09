@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import {
     Alert,
+    Clipboard,
     Platform,
     Pressable,
     Share,
@@ -14,6 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useChatUnread } from '@/hooks/use-chat-unread';
 import { useDeliveryStatus } from '@/hooks/use-delivery-status';
 import { useRiderTracking } from '@/hooks/use-rider-tracking';
 
@@ -29,11 +31,16 @@ const COLORS = {
   textFaint: '#9CA3AF',
   green: '#22C55E',
   border: '#F3F4F6',
+  error: '#EF4444',
 };
 
 const AVATAR_URI = 'https://randomuser.me/api/portraits/men/75.jpg';
 
 const TAGS = ['Electronics', 'M · 5.5kg', '₦566'];
+
+function orderCode(id: string): string {
+  return `FAMO-${id.replace(/-/g, '').slice(-5).toUpperCase()}`;
+}
 
 const STATUS_LABEL: Record<string, string> = {
   searching: 'Finding rider',
@@ -51,10 +58,12 @@ export function LiveTracking() {
   const paramRiderId =
     typeof params.riderId === 'string' && params.riderId ? params.riderId : null;
   const { delivery } = useDeliveryStatus(deliveryId);
+  const trackingCode = deliveryId ? orderCode(deliveryId) : null;
   const { position, live } = useRiderTracking(
     deliveryId,
     paramRiderId ?? delivery?.rider_id ?? null,
   );
+  const unreadCount = useChatUnread(deliveryId);
 
   // React to status changes that mean the current rider is no longer assigned.
   useEffect(() => {
@@ -91,11 +100,11 @@ export function LiveTracking() {
       {/* Top navigation & status */}
       <View style={[styles.topBar, { paddingTop: insets.top + 12 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => router.dismissTo('/')}
           style={styles.topButton}
           accessibilityRole="button"
-          accessibilityLabel="Go back">
-          <MaterialIcons name="arrow-back" size={24} color={COLORS.famoText} />
+          accessibilityLabel="Go to home">
+          <MaterialIcons name="home" size={24} color={COLORS.famoText} />
         </Pressable>
         <Pressable
           onPress={() => router.push('/delivery-success')}
@@ -110,23 +119,6 @@ export function LiveTracking() {
               ? `${live ? 'Live' : 'Last'} · ${position.lat.toFixed(4)}, ${position.lng.toFixed(4)}`
               : 'Locating rider…'}
           </Text>
-        </Pressable>
-        <Pressable
-          onPress={() =>
-            Alert.alert('Trip options', undefined, [
-              {
-                text: 'Share trip',
-                onPress: () =>
-                  Share.share({ message: 'Track my FAMO delivery in real time.' }),
-              },
-              { text: 'Get help', onPress: () => router.push('/help-support') },
-              { text: 'Cancel', style: 'cancel' },
-            ])
-          }
-          style={styles.topButton}
-          accessibilityRole="button"
-          accessibilityLabel="Options">
-          <MaterialIcons name="menu" size={24} color={COLORS.famoText} />
         </Pressable>
       </View>
 
@@ -159,14 +151,45 @@ export function LiveTracking() {
               <MaterialIcons name="call" size={20} color={COLORS.famoText} />
             </Pressable>
             <Pressable
-              onPress={() => router.push('/chat')}
+              onPress={() => router.push({ pathname: '/chat', params: { deliveryId: deliveryId ?? '' } })}
               style={({ pressed }) => [styles.commBtn, pressed && styles.pressed]}
               accessibilityRole="button"
-              accessibilityLabel="Message rider">
+              accessibilityLabel={
+                unreadCount > 0 ? `Message rider, ${unreadCount} unread` : 'Message rider'
+              }>
               <MaterialIcons name="chat-bubble-outline" size={20} color={COLORS.famoText} />
+              {unreadCount > 0 ? (
+                <View style={styles.unreadBadge}>
+                  <Text style={styles.unreadBadgeText}>
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </Text>
+                </View>
+              ) : null}
             </Pressable>
           </View>
         </View>
+
+        {/* Tracking number — copy or long-press to select, then look it up later in "Track Package" */}
+        {trackingCode ? (
+          <View style={styles.trackingRow}>
+            <View style={styles.trackingTextWrap}>
+              <Text style={styles.trackingLabel}>TRACKING NUMBER</Text>
+              <Text style={styles.trackingCode} selectable>
+                {trackingCode}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => {
+                Clipboard.setString(trackingCode);
+                Alert.alert('Copied', `Tracking number ${trackingCode} copied to clipboard.`);
+              }}
+              style={({ pressed }) => [styles.trackingCopyBtn, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Copy tracking number">
+              <MaterialIcons name="content-copy" size={18} color={COLORS.famoText} />
+            </Pressable>
+          </View>
+        ) : null}
 
         {/* Shipment tags */}
         <View style={styles.tags}>
@@ -346,6 +369,65 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.famoGray,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  unreadBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    backgroundColor: COLORS.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.surface,
+  },
+  unreadBadgeText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+    lineHeight: 14,
+  },
+  trackingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 16,
+    backgroundColor: COLORS.famoGray,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginBottom: 20,
+  },
+  trackingTextWrap: {
+    flex: 1,
+  },
+  trackingLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+    color: COLORS.textMuted,
+  },
+  trackingCode: {
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    color: COLORS.famoText,
+    marginTop: 2,
+  },
+  trackingCopyBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   tags: {
     flexDirection: 'row',

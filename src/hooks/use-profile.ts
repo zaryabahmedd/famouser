@@ -1,7 +1,10 @@
 // Loads and updates the signed-in user's profile row (public.users), including
 // uploading a new avatar image to the public `avatars` storage bucket.
-import { useCallback, useEffect, useState } from 'react';
+// Profile state lives in a shared React Context (ProfileProvider) so that all
+// consumers — Home, Sidebar, EditProfile — stay in sync after any update.
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
+import { base64ToBytes } from '@/lib/base64';
 import { supabase } from '@/lib/supabase';
 
 export type Profile = {
@@ -17,29 +20,28 @@ export type ProfileUpdate = {
   phone_number?: string;
 };
 
-// Minimal base64 -> Uint8Array decoder so we can upload an image picked with
-// expo-image-picker (base64: true) without pulling in an extra dependency.
-const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+type ProfileContextValue = {
+  profile: Profile | null;
+  loading: boolean;
+  reload: () => Promise<void>;
+  updateProfile: (update: ProfileUpdate) => Promise<string | null>;
+  uploadAvatar: (base64: string, mimeType?: string) => Promise<string | null>;
+};
 
-function base64ToBytes(base64: string): Uint8Array {
-  const clean = base64.replace(/[^A-Za-z0-9+/]/g, '');
-  const len = clean.length;
-  const bytes = new Uint8Array((len * 3) / 4 - (clean.endsWith('==') ? 2 : clean.endsWith('=') ? 1 : 0));
-  let p = 0;
-  for (let i = 0; i < len; i += 4) {
-    const e1 = B64.indexOf(clean[i]);
-    const e2 = B64.indexOf(clean[i + 1]);
-    const e3 = B64.indexOf(clean[i + 2]);
-    const e4 = B64.indexOf(clean[i + 3]);
-    const chunk = (e1 << 18) | (e2 << 12) | ((e3 & 63) << 6) | (e4 & 63);
-    if (p < bytes.length) bytes[p++] = (chunk >> 16) & 255;
-    if (p < bytes.length) bytes[p++] = (chunk >> 8) & 255;
-    if (p < bytes.length) bytes[p++] = chunk & 255;
-  }
-  return bytes;
-}
+export const ProfileContext = createContext<ProfileContextValue>({
+  profile: null,
+  loading: true,
+  reload: async () => {},
+  updateProfile: async () => null,
+  uploadAvatar: async () => null,
+});
 
 export function useProfile() {
+  return useContext(ProfileContext);
+}
+
+// Mount this once in _layout.tsx so the profile is shared across all screens.
+export function useProfileProvider(): ProfileContextValue {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -74,7 +76,6 @@ export function useProfile() {
     load();
   }, [load]);
 
-  // Persist name / phone changes to the users row.
   const updateProfile = useCallback(async (update: ProfileUpdate): Promise<string | null> => {
     const { data: auth } = await supabase.auth.getUser();
     const userId = auth.user?.id;
@@ -92,37 +93,33 @@ export function useProfile() {
     return null;
   }, []);
 
-  // Upload a base64 image to the avatars bucket and save its public URL.
-  const uploadAvatar = useCallback(
-    async (base64: string, mimeType = 'image/jpeg'): Promise<string | null> => {
-      const { data: auth } = await supabase.auth.getUser();
-      const userId = auth.user?.id;
-      if (!userId) return 'You must be signed in.';
+  const uploadAvatar = useCallback(async (base64: string, mimeType = 'image/jpeg'): Promise<string | null> => {
+    const { data: auth } = await supabase.auth.getUser();
+    const userId = auth.user?.id;
+    if (!userId) return 'You must be signed in.';
 
-      const ext = mimeType.includes('png') ? 'png' : 'jpg';
-      const path = `${userId}/avatar-${Date.now()}.${ext}`;
-      const bytes = base64ToBytes(base64);
+    const ext = mimeType.includes('png') ? 'png' : 'jpg';
+    const path = `${userId}/avatar-${Date.now()}.${ext}`;
+    const bytes = base64ToBytes(base64);
 
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(path, bytes, { contentType: mimeType, upsert: true });
-      if (uploadError) return uploadError.message;
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(path, bytes, { contentType: mimeType, upsert: true });
+    if (uploadError) return uploadError.message;
 
-      const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
-      const publicUrl = pub.publicUrl;
+    const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
+    const publicUrl = pub.publicUrl;
 
-      const { data, error } = await supabase
-        .from('users')
-        .update({ avatar_url: publicUrl })
-        .eq('id', userId)
-        .select('id, full_name, email, phone_number, avatar_url')
-        .single();
-      if (error) return error.message;
-      if (data) setProfile(data);
-      return null;
-    },
-    [],
-  );
+    const { data, error } = await supabase
+      .from('users')
+      .update({ avatar_url: publicUrl })
+      .eq('id', userId)
+      .select('id, full_name, email, phone_number, avatar_url')
+      .single();
+    if (error) return error.message;
+    if (data) setProfile(data);
+    return null;
+  }, []);
 
   return { profile, loading, reload: load, updateProfile, uploadAvatar };
 }

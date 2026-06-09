@@ -15,7 +15,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { GoogleIcon } from '@/components/google-icon';
 
 const COLORS = {
   background: '#fbf9f9',
@@ -155,18 +154,7 @@ export function Login({ onLogin, onSignUp, onForgotPassword, onBack }: LoginProp
               )}
             </Pressable>
 
-            <View style={styles.dividerRow}>
-              <View style={styles.divider} />
-              <Text style={styles.dividerText}>or</Text>
-              <View style={styles.divider} />
-            </View>
 
-            <Pressable
-              style={({ pressed }) => [styles.googleBtn, pressed && styles.googleBtnPressed]}
-              accessibilityRole="button">
-              <GoogleIcon size={20} />
-              <Text style={styles.googleText}>Continue with Google</Text>
-            </Pressable>
           </View>
 
           <View style={styles.footer}>
@@ -233,22 +221,7 @@ const styles = StyleSheet.create({
   primaryBtnDisabled: { opacity: 0.6 },
   primaryText: { fontSize: 16, fontWeight: '700', color: COLORS.onPrimaryContainer },
   errorText: { fontSize: 13, lineHeight: 18, color: '#b3261e' },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  divider: { flex: 1, height: 1, backgroundColor: COLORS.outlineVariant },
-  dividerText: { fontSize: 14, color: COLORS.outline },
-  googleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    height: 56,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant,
-    backgroundColor: COLORS.surfaceLowest,
-  },
-  googleBtnPressed: { opacity: 0.85 },
-  googleText: { fontSize: 16, fontWeight: '600', color: COLORS.onSurface },
+
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',

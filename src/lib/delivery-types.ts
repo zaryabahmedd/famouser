@@ -33,6 +33,11 @@ export type Delivery = {
   pickup_notes: string | null;
   dropoff_notes: string | null;
   special_instructions: string | null;
+  // How (and proof of) payment, set at order creation and read by the rider app
+  // when it arrives at the drop-off location.
+  payment_method: 'cod' | 'bank_transfer' | null;
+  payment_screenshot_url: string | null;
+  accepted_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -57,6 +62,28 @@ export type NewDeliveryInput = {
   pickup_notes?: string | null;
   dropoff_notes?: string | null;
   special_instructions?: string | null;
+  payment_method?: 'cod' | 'bank_transfer' | null;
+  payment_screenshot_url?: string | null;
+};
+
+// ---- Live-chat contract (must match the rider app) ----
+
+// Channel name is per-delivery: `delivery-chat:{delivery_id}`. Subscribe to
+// Postgres Changes (INSERT) on `messages` filtered by delivery_id so history
+// persists and survives reconnects (unlike the GPS broadcast channel).
+export const chatChannelName = (deliveryId: string) => `delivery-chat:${deliveryId}`;
+
+export type ChatSenderRole = 'user' | 'rider';
+
+export type ChatMessage = {
+  id: string;
+  delivery_id: string;
+  // auth.uid() for the customer; the rider's `riders.id` for the rider (riders
+  // don't carry a Supabase session, so this is not always an auth user id).
+  sender_id: string | null;
+  sender_role: ChatSenderRole;
+  body: string;
+  created_at: string;
 };
 
 // ---- Live-tracking Realtime contract (must match the rider app) ----

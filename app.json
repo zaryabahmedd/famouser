@@ -15,6 +15,7 @@
     },
     "android": {
       "package": "com.famo.user",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/icon.png"
@@ -32,6 +33,13 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#FCD34D"
+        }
+      ],
       [
         "expo-image-picker",
         {

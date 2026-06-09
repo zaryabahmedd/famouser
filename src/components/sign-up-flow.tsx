@@ -4,6 +4,7 @@ import { EnablePermissions } from '@/components/enable-permissions';
 import { ForgotPassword } from '@/components/forgot-password';
 import { Login } from '@/components/login';
 import { OtpVerification } from '@/components/otp-verification';
+import { ResetPassword } from '@/components/reset-password';
 import { SignUp, type SignUpValues } from '@/components/sign-up';
 import { supabase } from '@/lib/supabase';
 
@@ -11,9 +12,12 @@ type SignUpFlowProps = {
   onComplete: () => void;
 };
 
+type ForgotStep = 'email' | 'otp' | 'password' | null;
+
 export function SignUpFlow({ onComplete }: SignUpFlowProps) {
   const [showLogin, setShowLogin] = useState(true);
-  const [showForgot, setShowForgot] = useState(false);
+  const [forgotStep, setForgotStep] = useState<ForgotStep>(null);
+  const [forgotEmail, setForgotEmail] = useState('');
   const [showOtp, setShowOtp] = useState(false);
   const [showPermissions, setShowPermissions] = useState(false);
   const [signUpData, setSignUpData] = useState<SignUpValues | null>(null);
@@ -82,8 +86,76 @@ export function SignUpFlow({ onComplete }: SignUpFlowProps) {
     return null;
   };
 
-  if (showForgot) {
-    return <ForgotPassword onBack={() => setShowForgot(false)} onDone={() => setShowForgot(false)} />;
+  const handleForgotEmailSubmit = async (email: string): Promise<string | null> => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    if (error) return error.message;
+    setForgotEmail(email);
+    setForgotStep('otp');
+    return null;
+  };
+
+  const handleForgotVerifyOtp = async (code: string): Promise<string | null> => {
+    if (!forgotEmail) return 'Something went wrong. Please start again.';
+    const { error } = await supabase.auth.verifyOtp({
+      email: forgotEmail,
+      token: code,
+      type: 'recovery',
+    });
+    if (error) return error.message;
+    setForgotStep('password');
+    return null;
+  };
+
+  const handleForgotResendOtp = async (): Promise<string | null> => {
+    if (!forgotEmail) return 'Something went wrong. Please start again.';
+    const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail);
+    return error ? error.message : null;
+  };
+
+  const handleResetPassword = async (newPassword: string): Promise<string | null> => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) return error.message;
+    // Sign out so the user must log in with the new password.
+    await supabase.auth.signOut();
+    setForgotStep(null);
+    setForgotEmail('');
+    setShowLogin(true);
+    return null;
+  };
+
+  if (forgotStep === 'password') {
+    return (
+      <ResetPassword
+        onBack={() => setForgotStep('otp')}
+        onSubmit={handleResetPassword}
+      />
+    );
+  }
+
+  if (forgotStep === 'otp') {
+    return (
+      <OtpVerification
+        destination={forgotEmail}
+        title="Enter reset code"
+        stepLabel="RESET PASSWORD · STEP 2/3"
+        progress={2 / 3}
+        onVerify={handleForgotVerifyOtp}
+        onResend={handleForgotResendOtp}
+        onBack={() => setForgotStep('email')}
+      />
+    );
+  }
+
+  if (forgotStep === 'email') {
+    return (
+      <ForgotPassword
+        onBack={() => {
+          setForgotStep(null);
+          setForgotEmail('');
+        }}
+        onSubmit={handleForgotEmailSubmit}
+      />
+    );
   }
 
   if (showLogin) {
@@ -91,7 +163,7 @@ export function SignUpFlow({ onComplete }: SignUpFlowProps) {
       <Login
         onLogin={handleLogin}
         onSignUp={() => setShowLogin(false)}
-        onForgotPassword={() => setShowForgot(true)}
+        onForgotPassword={() => setForgotStep('email')}
       />
     );
   }

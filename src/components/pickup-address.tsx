@@ -245,7 +245,7 @@ export function PickupAddress() {
           <TextInput
             value={citySearch.query}
             onChangeText={citySearch.onChangeText}
-            placeholder="Search city"
+            placeholder="Enter Your Address"
             placeholderTextColor={COLORS.outline}
             style={styles.input}
           />

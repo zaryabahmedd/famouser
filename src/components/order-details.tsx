@@ -1,7 +1,9 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect, useState } from 'react';
 import {
+    ActivityIndicator,
     Platform,
     Pressable,
     ScrollView,
@@ -11,6 +13,9 @@ import {
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import type { Delivery } from '@/lib/delivery-types';
+import { supabase } from '@/lib/supabase';
 
 const COLORS = {
   surface: '#ffffff',
@@ -27,36 +32,135 @@ const COLORS = {
   onPrimaryContainer: '#726300',
   onPrimaryFixed: '#211b00',
   success: '#1a7d4b',
+  errorBg: 'rgba(186,26,26,0.1)',
+  errorText: '#ba1a1a',
 };
 
-type Step = {
-  label: string;
-  time: string;
-  done: boolean;
+type RiderInfo = {
+  full_name: string;
+  vehicle_type: string | null;
+  vehicle_brand: string | null;
+  vehicle_model: string | null;
 };
 
-const STEPS: Step[] = [
-  { label: 'Order placed', time: 'Today · 10:02 AM', done: true },
-  { label: 'Rider assigned', time: 'Today · 10:08 AM', done: true },
-  { label: 'Picked up', time: 'Today · 10:21 AM', done: true },
-  { label: 'Delivered', time: 'Today · 10:32 AM', done: true },
-];
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const yest = new Date();
+  yest.setDate(now.getDate() - 1);
+  const t = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  if (d.toDateString() === now.toDateString()) return `Today · ${t}`;
+  if (d.toDateString() === yest.toDateString()) return `Yesterday · ${t}`;
+  return `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · ${t}`;
+}
 
-const FARE: { label: string; value: string }[] = [
-  { label: 'Base fare', value: '₦320' },
-  { label: 'Distance (12.4 km)', value: '₦186' },
-  { label: 'Service fee', value: '₦60' },
-];
+function orderCode(id: string): string {
+  return `FAMO-${id.replace(/-/g, '').slice(-5).toUpperCase()}`;
+}
+
+type TimelineStep = { label: string; time: string; done: boolean };
+
+function buildTimeline(delivery: Delivery): TimelineStep[] {
+  const cancelled = delivery.status === 'cancelled';
+
+  const steps: TimelineStep[] = [
+    { label: 'Order placed', time: formatTime(delivery.created_at), done: true },
+  ];
+
+  if (cancelled) {
+    steps.push({ label: 'Cancelled', time: formatTime(delivery.updated_at), done: true });
+    return steps;
+  }
+
+  const riderAssigned = ['accepted', 'picked_up', 'delivered'].includes(delivery.status);
+  steps.push({
+    label: 'Rider assigned',
+    time: delivery.accepted_at ? formatTime(delivery.accepted_at) : '',
+    done: riderAssigned,
+  });
+
+  const pickedUp = ['picked_up', 'delivered'].includes(delivery.status);
+  steps.push({ label: 'Picked up', time: '', done: pickedUp });
+
+  const delivered = delivery.status === 'delivered';
+  steps.push({
+    label: 'Delivered',
+    time: delivered ? formatTime(delivery.updated_at) : '',
+    done: delivered,
+  });
+
+  return steps;
+}
 
 export function OrderDetails() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { deliveryId } = useLocalSearchParams<{ deliveryId?: string }>();
+
+  const [delivery, setDelivery] = useState<Delivery | null>(null);
+  const [rider, setRider] = useState<RiderInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!deliveryId) { setLoading(false); return; }
+    let active = true;
+
+    (async () => {
+      const { data } = await supabase
+        .from('deliveries')
+        .select('*')
+        .eq('id', deliveryId)
+        .single();
+
+      if (!active) return;
+      if (data) {
+        const d = data as Delivery;
+        setDelivery(d);
+
+        if (d.rider_id) {
+          const { data: riderData } = await supabase
+            .from('riders')
+            .select('full_name, vehicle_type, vehicle_brand, vehicle_model')
+            .eq('id', d.rider_id)
+            .single();
+          if (active && riderData) setRider(riderData as RiderInfo);
+        }
+      }
+      if (active) setLoading(false);
+    })();
+
+    return () => { active = false; };
+  }, [deliveryId]);
+
+  if (loading) {
+    return (
+      <View style={[styles.root, styles.center]}>
+        <ActivityIndicator color={COLORS.primary} />
+      </View>
+    );
+  }
+
+  if (!delivery) {
+    return (
+      <View style={[styles.root, styles.center]}>
+        <Text style={styles.errorText}>Order not found.</Text>
+        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+          <Text style={styles.backBtnText}>Go back</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  const steps = buildTimeline(delivery);
+  const isCancelled = delivery.status === 'cancelled';
+  const vehicleLabel = rider
+    ? [rider.vehicle_type, rider.vehicle_brand, rider.vehicle_model].filter(Boolean).join(' · ')
+    : null;
 
   return (
     <View style={styles.root}>
       <StatusBar style="dark" />
 
-      {/* Top bar */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable
           onPress={() => router.back()}
@@ -68,9 +172,7 @@ export function OrderDetails() {
         </Pressable>
         <Text style={styles.headerTitle}>Order details</Text>
         <Pressable
-          onPress={() =>
-            Share.share({ message: 'Here is my FAMO delivery receipt.' })
-          }
+          onPress={() => Share.share({ message: `FAMO delivery ${orderCode(delivery.id)}` })}
           hitSlop={10}
           style={styles.iconButton}
           accessibilityRole="button"
@@ -82,18 +184,23 @@ export function OrderDetails() {
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 24 }]}
         showsVerticalScrollIndicator={false}>
-        {/* Status banner */}
-        <View style={styles.banner}>
+
+        <View style={[styles.banner, isCancelled && styles.bannerCancelled]}>
           <View style={styles.bannerIcon}>
-            <MaterialIcons name="check-circle" size={28} color={COLORS.success} />
+            <MaterialIcons
+              name={isCancelled ? 'cancel' : 'check-circle'}
+              size={28}
+              color={isCancelled ? COLORS.errorText : COLORS.success}
+            />
           </View>
           <View style={styles.bannerText}>
-            <Text style={styles.bannerTitle}>Delivered</Text>
-            <Text style={styles.bannerSub}>Order #FAM-29384 · Today, 10:32 AM</Text>
+            <Text style={styles.bannerTitle}>{isCancelled ? 'Cancelled' : 'Delivered'}</Text>
+            <Text style={styles.bannerSub}>
+              {orderCode(delivery.id)} · {formatTime(delivery.updated_at)}
+            </Text>
           </View>
         </View>
 
-        {/* Route */}
         <View style={styles.card}>
           <View style={styles.routeRow}>
             <View style={styles.routeTimeline}>
@@ -104,76 +211,62 @@ export function OrderDetails() {
             <View style={styles.routePoints}>
               <View style={styles.routePoint}>
                 <Text style={styles.routeLabel}>PICKUP</Text>
-                <Text style={styles.routeValue}>DHA Phase 5, Lahore</Text>
+                <Text style={styles.routeValue}>{delivery.pickup_address ?? 'Pickup location'}</Text>
               </View>
               <View style={styles.routePoint}>
                 <Text style={styles.routeLabel}>DROP-OFF</Text>
-                <Text style={styles.routeValue}>Gulberg III, Lahore</Text>
+                <Text style={styles.routeValue}>{delivery.dropoff_address ?? 'Drop-off location'}</Text>
               </View>
             </View>
           </View>
         </View>
 
-        {/* Timeline */}
         <Text style={styles.sectionTitle}>Timeline</Text>
         <View style={styles.card}>
-          {STEPS.map((s, i) => (
+          {steps.map((s, i) => (
             <View key={s.label} style={styles.stepRow}>
               <View style={styles.stepCol}>
                 <View style={[styles.stepDot, s.done && styles.stepDotDone]}>
                   {s.done && <MaterialIcons name="check" size={12} color={COLORS.onPrimaryFixed} />}
                 </View>
-                {i < STEPS.length - 1 && <View style={styles.stepLine} />}
+                {i < steps.length - 1 && <View style={styles.stepLine} />}
               </View>
               <View style={styles.stepText}>
                 <Text style={styles.stepLabel}>{s.label}</Text>
-                <Text style={styles.stepTime}>{s.time}</Text>
+                {s.time ? <Text style={styles.stepTime}>{s.time}</Text> : null}
               </View>
             </View>
           ))}
         </View>
 
-        {/* Rider */}
-        <Text style={styles.sectionTitle}>Rider</Text>
-        <View style={[styles.card, styles.riderCard]}>
-          <View style={styles.riderAvatar}>
-            <MaterialIcons name="two-wheeler" size={24} color={COLORS.primary} />
-          </View>
-          <View style={styles.riderText}>
-            <Text style={styles.riderName}>Rashid Ahmed</Text>
-            <Text style={styles.riderMeta}>Electric Scooter · 4.9★</Text>
-          </View>
-          <Pressable
-            onPress={() => router.push('/chat')}
-            style={styles.riderBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Message rider">
-            <MaterialIcons name="chat-bubble-outline" size={20} color={COLORS.onPrimaryContainer} />
-          </Pressable>
-        </View>
-
-        {/* Fare */}
-        <Text style={styles.sectionTitle}>Payment</Text>
-        <View style={styles.card}>
-          {FARE.map((row) => (
-            <View key={row.label} style={styles.fareRow}>
-              <Text style={styles.fareLabel}>{row.label}</Text>
-              <Text style={styles.fareValue}>{row.value}</Text>
+        {rider && (
+          <>
+            <Text style={styles.sectionTitle}>Rider</Text>
+            <View style={[styles.card, styles.riderCard]}>
+              <View style={styles.riderAvatar}>
+                <MaterialIcons name="two-wheeler" size={24} color={COLORS.primary} />
+              </View>
+              <View style={styles.riderText}>
+                <Text style={styles.riderName}>{rider.full_name}</Text>
+                {vehicleLabel ? <Text style={styles.riderMeta}>{vehicleLabel}</Text> : null}
+              </View>
             </View>
-          ))}
-          <View style={styles.fareDivider} />
-          <View style={styles.fareRow}>
-            <Text style={styles.totalLabel}>Total paid</Text>
-            <Text style={styles.totalValue}>₦566</Text>
-          </View>
-          <View style={styles.payMethod}>
-            <MaterialIcons name="credit-card" size={18} color={COLORS.onSurfaceVariant} />
-            <Text style={styles.payMethodText}>Visa •••• 4242</Text>
-          </View>
-        </View>
+          </>
+        )}
+
+        {delivery.price != null && (
+          <>
+            <Text style={styles.sectionTitle}>Payment</Text>
+            <View style={styles.card}>
+              <View style={styles.fareRow}>
+                <Text style={styles.totalLabel}>Total paid</Text>
+                <Text style={styles.totalValue}>₦{Number(delivery.price).toLocaleString()}</Text>
+              </View>
+            </View>
+          </>
+        )}
       </ScrollView>
 
-      {/* Footer actions */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
         <Pressable
           onPress={() => router.push('/help-support')}
@@ -181,12 +274,6 @@ export function OrderDetails() {
           accessibilityRole="button">
           <MaterialIcons name="report-problem" size={20} color={COLORS.onSurface} />
           <Text style={styles.secondaryText}>Report issue</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => router.push('/instant-quote')}
-          style={({ pressed }) => [styles.primaryBtn, pressed && styles.btnPressed]}
-          accessibilityRole="button">
-          <Text style={styles.primaryText}>Reorder</Text>
         </Pressable>
       </View>
     </View>
@@ -198,6 +285,26 @@ const styles = StyleSheet.create({
     flex: 1,
     ...(Platform.OS === 'web' ? ({ position: 'fixed', inset: 0 } as object) : null),
     backgroundColor: COLORS.surface,
+  },
+  center: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  errorText: {
+    fontSize: 16,
+    color: COLORS.onSurfaceVariant,
+  },
+  backBtn: {
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: COLORS.primaryContainer,
+  },
+  backBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.onPrimaryFixed,
   },
   header: {
     flexDirection: 'row',
@@ -236,6 +343,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: 'rgba(26, 125, 75, 0.1)',
     marginBottom: 20,
+  },
+  bannerCancelled: {
+    backgroundColor: 'rgba(186, 26, 26, 0.08)',
   },
   bannerIcon: {
     width: 44,
@@ -381,33 +491,11 @@ const styles = StyleSheet.create({
     color: COLORS.secondary,
     marginTop: 2,
   },
-  riderBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 999,
-    backgroundColor: COLORS.primaryContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   fareRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 6,
-  },
-  fareLabel: {
-    fontSize: 15,
-    color: COLORS.onSurfaceVariant,
-  },
-  fareValue: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.onSurface,
-  },
-  fareDivider: {
-    height: 1,
-    backgroundColor: COLORS.outlineVariant,
-    marginVertical: 8,
+    paddingVertical: 4,
   },
   totalLabel: {
     fontSize: 16,
@@ -418,20 +506,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
     color: COLORS.onSurface,
-  },
-  payMethod: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.outlineVariant,
-  },
-  payMethodText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.onSurfaceVariant,
   },
   footer: {
     flexDirection: 'row',
@@ -458,19 +532,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: COLORS.onSurface,
-  },
-  primaryBtn: {
-    flex: 1,
-    height: 52,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.primaryContainer,
-  },
-  primaryText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.onPrimaryFixed,
   },
   btnPressed: {
     opacity: 0.85,

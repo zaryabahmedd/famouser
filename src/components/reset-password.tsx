@@ -26,31 +26,37 @@ const COLORS = {
   outlineVariant: '#d0c6ab',
 };
 
-type ForgotPasswordProps = {
+type ResetPasswordProps = {
   onBack?: () => void;
-  onSubmit: (email: string) => Promise<string | null>;
+  onSubmit: (newPassword: string) => Promise<string | null>;
 };
 
-export function ForgotPassword({ onBack, onSubmit }: ForgotPasswordProps) {
+export function ResetPassword({ onBack, onSubmit }: ResetPasswordProps) {
   const insets = useSafeAreaInsets();
-  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async () => {
     if (submitting) return;
-    const trimmed = email.trim();
-    if (!trimmed) {
-      setError('Please enter your email address.');
+    if (!password || !confirm) {
+      setError('Please fill in both fields.');
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      setError('Please enter a valid email address.');
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+    if (password !== confirm) {
+      setError('Passwords do not match.');
       return;
     }
     setError(null);
     setSubmitting(true);
-    const result = await onSubmit(trimmed);
+    const result = await onSubmit(password);
     if (result) {
       setError(result);
       setSubmitting(false);
@@ -64,7 +70,7 @@ export function ForgotPassword({ onBack, onSubmit }: ForgotPasswordProps) {
         <Pressable onPress={onBack} style={styles.iconBtn} accessibilityRole="button" accessibilityLabel="Back">
           <MaterialIcons name="arrow-back" size={24} color={COLORS.onSurfaceVariant} />
         </Pressable>
-        <Text style={styles.appBarTitle}>Reset password</Text>
+        <Text style={styles.appBarTitle}>New password</Text>
         <View style={styles.iconBtn} />
       </View>
 
@@ -77,29 +83,65 @@ export function ForgotPassword({ onBack, onSubmit }: ForgotPasswordProps) {
           showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
             <View style={styles.lockIcon}>
-              <MaterialIcons name="lock-reset" size={36} color={COLORS.onPrimaryContainer} />
+              <MaterialIcons name="lock" size={36} color={COLORS.onPrimaryContainer} />
             </View>
-            <Text style={styles.title}>Forgot password?</Text>
+            <Text style={styles.title}>Set a new password</Text>
             <Text style={styles.subtitle}>
-              Enter the email linked to your account and we&apos;ll send you a 6-digit code to reset your password.
+              Choose a password you haven&apos;t used before. Your old password will no longer work.
             </Text>
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.label}>Email Address</Text>
+            <Text style={styles.label}>New Password</Text>
             <View style={styles.inputWrap}>
-              <MaterialIcons name="mail" size={20} color={COLORS.outline} />
+              <MaterialIcons name="lock" size={20} color={COLORS.outline} />
               <TextInput
-                value={email}
-                onChangeText={setEmail}
-                placeholder="you@example.com"
+                value={password}
+                onChangeText={setPassword}
+                placeholder="At least 6 characters"
                 placeholderTextColor={COLORS.outline}
-                keyboardType="email-address"
+                secureTextEntry={!showPassword}
                 autoCapitalize="none"
-                autoComplete="email"
                 style={styles.input}
                 editable={!submitting}
               />
+              <Pressable
+                onPress={() => setShowPassword((v) => !v)}
+                accessibilityRole="button"
+                accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}>
+                <MaterialIcons
+                  name={showPassword ? 'visibility-off' : 'visibility'}
+                  size={20}
+                  color={COLORS.outline}
+                />
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.label}>Confirm New Password</Text>
+            <View style={styles.inputWrap}>
+              <MaterialIcons name="lock" size={20} color={COLORS.outline} />
+              <TextInput
+                value={confirm}
+                onChangeText={setConfirm}
+                placeholder="Re-enter your new password"
+                placeholderTextColor={COLORS.outline}
+                secureTextEntry={!showConfirm}
+                autoCapitalize="none"
+                style={styles.input}
+                editable={!submitting}
+              />
+              <Pressable
+                onPress={() => setShowConfirm((v) => !v)}
+                accessibilityRole="button"
+                accessibilityLabel={showConfirm ? 'Hide password' : 'Show password'}>
+                <MaterialIcons
+                  name={showConfirm ? 'visibility-off' : 'visibility'}
+                  size={20}
+                  color={COLORS.outline}
+                />
+              </Pressable>
             </View>
           </View>
 
@@ -117,7 +159,7 @@ export function ForgotPassword({ onBack, onSubmit }: ForgotPasswordProps) {
             {submitting ? (
               <ActivityIndicator color={COLORS.onPrimaryContainer} />
             ) : (
-              <Text style={styles.primaryText}>Send 6-digit code</Text>
+              <Text style={styles.primaryText}>Update password</Text>
             )}
           </Pressable>
         </ScrollView>
@@ -149,12 +191,12 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 24,
     paddingTop: 32,
-    gap: 28,
+    gap: 20,
     maxWidth: 480,
     width: '100%',
     alignSelf: 'center',
   },
-  header: { alignItems: 'center', gap: 12 },
+  header: { alignItems: 'center', gap: 12, marginBottom: 4 },
   lockIcon: {
     width: 80,
     height: 80,
@@ -178,7 +220,13 @@ const styles = StyleSheet.create({
     borderColor: COLORS.outlineVariant,
     borderRadius: 12,
   },
-  input: { flex: 1, fontSize: 16, color: COLORS.onSurface, paddingVertical: 0, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    color: COLORS.onSurface,
+    paddingVertical: 0,
+    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null),
+  },
   errorText: { fontSize: 13, lineHeight: 18, color: '#b3261e' },
   primaryBtn: {
     height: 56,

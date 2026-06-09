@@ -2,8 +2,9 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+    ActivityIndicator,
     Platform,
     Pressable,
     ScrollView,
@@ -14,6 +15,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomNav } from '@/components/bottom-nav';
+import type { Delivery } from '@/lib/delivery-types';
+import { supabase } from '@/lib/supabase';
 
 const COLORS = {
   surface: '#ffffff',
@@ -35,49 +38,82 @@ const COLORS = {
 
 const TABS = ['Active', 'Scheduled', 'Completed'];
 
-type Status = {
-  label: string;
-  bg: string;
-  color: string;
-};
+const ACTIVE_STATUSES = ['searching', 'accepted', 'picked_up'];
+const COMPLETED_STATUSES = ['delivered', 'cancelled'];
 
-const STATUS: Record<string, Status> = {
-  transit: { label: 'In transit', bg: '#E9E1FF', color: '#6750A4' },
-  picked: { label: 'Picked', bg: '#E1F5FE', color: '#01579B' },
-  delivered: { label: 'Delivered', bg: COLORS.secondaryContainer, color: COLORS.onSecondaryContainer },
-  cancelled: { label: 'Cancelled', bg: COLORS.errorContainer, color: COLORS.onErrorContainer },
-};
+function getStatusDisplay(status: string) {
+  switch (status) {
+    case 'searching':
+      return { label: 'Finding rider', bg: '#E9E1FF', color: '#6750A4' };
+    case 'accepted':
+      return { label: 'Rider on way', bg: '#E1F5FE', color: '#01579B' };
+    case 'picked_up':
+      return { label: 'In transit', bg: '#E9E1FF', color: '#6750A4' };
+    case 'delivered':
+      return { label: 'Delivered', bg: COLORS.secondaryContainer, color: COLORS.onSecondaryContainer };
+    case 'cancelled':
+      return { label: 'Cancelled', bg: COLORS.errorContainer, color: COLORS.onErrorContainer };
+    default:
+      return { label: status, bg: COLORS.secondaryContainer, color: COLORS.onSecondaryContainer };
+  }
+}
 
-type Order = {
-  id: string;
-  code: string;
-  icon: keyof typeof MaterialIcons.glyphMap;
-  from: string;
-  to: string;
-  time: string;
-  price: string;
-  status: keyof typeof STATUS;
-  highlight?: boolean;
-};
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const yest = new Date();
+  yest.setDate(now.getDate() - 1);
+  const t = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  if (d.toDateString() === now.toDateString()) return `Today · ${t}`;
+  if (d.toDateString() === yest.toDateString()) return `Yesterday · ${t}`;
+  return `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · ${t}`;
+}
 
-const ORDERS: Order[] = [
-  { id: 'o1', code: 'FAMO-94821', icon: 'inventory-2', from: 'DHA Phase 5', to: 'Gulberg III', time: 'Today · 10:32 AM', price: '₦566', status: 'transit' },
-  { id: 'o2', code: 'FAMO-94815', icon: 'inventory', from: 'Office', to: 'Lahore Cantt', time: 'Today · 09:18 AM', price: '₦420', status: 'picked' },
-  { id: 'o3', code: 'FAMO-94800', icon: 'inventory-2', from: 'Home', to: "Mom's House", time: 'Yesterday · 6:40 PM', price: '₦380', status: 'delivered', highlight: true },
-  { id: 'o4', code: 'FAMO-94782', icon: 'inventory-2', from: 'Warehouse', to: 'Shop', time: 'May 12 · 2:15 PM', price: '₦1,240', status: 'delivered' },
-  { id: 'o5', code: 'FAMO-94771', icon: 'inventory', from: 'DHA', to: 'Bahria', time: 'May 10 · 11:00 AM', price: '₦0', status: 'cancelled' },
-];
+function orderCode(id: string): string {
+  return `FAMO-${id.replace(/-/g, '').slice(-5).toUpperCase()}`;
+}
 
 export function Orders() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [tab, setTab] = useState('Active');
+  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id;
+      if (!userId || !active) {
+        setLoading(false);
+        return;
+      }
+      const { data } = await supabase
+        .from('deliveries')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+      if (active) {
+        setDeliveries((data as Delivery[]) ?? []);
+        setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const filtered = deliveries.filter((d) => {
+    if (tab === 'Active') return ACTIVE_STATUSES.includes(d.status);
+    if (tab === 'Completed') return COMPLETED_STATUSES.includes(d.status);
+    return false;
+  });
 
   return (
     <View style={styles.root}>
       <StatusBar style="dark" />
 
-      {/* Top bar */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <View style={styles.headerLeft}>
           <Pressable
@@ -109,7 +145,6 @@ export function Orders() {
         showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Orders</Text>
 
-        {/* Tabs */}
         <View style={styles.tabs}>
           {TABS.map((t) => {
             const isActive = tab === t;
@@ -126,61 +161,69 @@ export function Orders() {
           })}
         </View>
 
-        {/* Orders list */}
-        <View style={styles.list}>
-          {ORDERS.map((order) => {
-            const status = STATUS[order.status];
-            return (
-              <Pressable
-                key={order.id}
-                onPress={() =>
-                  order.status === 'delivered' || order.status === 'cancelled'
-                    ? router.push('/order-details')
-                    : router.push('/live-tracking')
-                }
-                style={({ pressed }) => [
-                  styles.card,
-                  order.highlight && styles.cardHighlight,
-                  pressed && styles.cardPressed,
-                ]}
-                accessibilityRole="button">
-                <View style={styles.cardTop}>
-                  <View style={styles.cardIcon}>
-                    <MaterialIcons name={order.icon} size={20} color={COLORS.onSurfaceVariant} />
+        {loading ? (
+          <ActivityIndicator style={styles.loader} color={COLORS.primary} />
+        ) : filtered.length === 0 ? (
+          <View style={styles.empty}>
+            <MaterialIcons name="inventory-2" size={48} color={COLORS.outlineVariant} />
+            <Text style={styles.emptyText}>
+              {tab === 'Scheduled' ? 'No scheduled orders yet' : `No ${tab.toLowerCase()} orders`}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.list}>
+            {filtered.map((order) => {
+              const status = getStatusDisplay(order.status);
+              const isActiveOrder = ACTIVE_STATUSES.includes(order.status);
+              return (
+                <Pressable
+                  key={order.id}
+                  onPress={() =>
+                    isActiveOrder
+                      ? router.push({ pathname: '/live-tracking', params: { deliveryId: order.id } })
+                      : router.push({ pathname: '/order-details', params: { deliveryId: order.id } })
+                  }
+                  style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+                  accessibilityRole="button">
+                  <View style={styles.cardTop}>
+                    <View style={styles.cardIcon}>
+                      <MaterialIcons name="inventory-2" size={20} color={COLORS.onSurfaceVariant} />
+                    </View>
+                    <View style={styles.cardTopText}>
+                      <Text style={styles.cardCode}>{orderCode(order.id)}</Text>
+                      <Text style={styles.cardTime} numberOfLines={1}>
+                        {formatTime(order.created_at)}
+                      </Text>
+                    </View>
+                    <View style={[styles.statusPill, { backgroundColor: status.bg }]}>
+                      <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
+                    </View>
                   </View>
-                  <View style={styles.cardTopText}>
-                    <Text style={styles.cardCode}>{order.code}</Text>
-                    <Text style={styles.cardTime} numberOfLines={1}>
-                      {order.time}
-                    </Text>
-                  </View>
-                  <View style={[styles.statusPill, { backgroundColor: status.bg }]}>
-                    <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
-                  </View>
-                </View>
 
-                <View style={styles.routeRow}>
-                  <View style={styles.routeDots}>
-                    <View style={styles.dotOrigin} />
-                    <View style={styles.routeLine} />
-                    <MaterialIcons name="place" size={14} color={COLORS.onSurface} />
-                  </View>
-                  <View style={styles.routeText}>
-                    <Text style={styles.routePoint} numberOfLines={1}>
-                      {order.from}
+                  <View style={styles.routeRow}>
+                    <View style={styles.routeDots}>
+                      <View style={styles.dotOrigin} />
+                      <View style={styles.routeLine} />
+                      <MaterialIcons name="place" size={14} color={COLORS.onSurface} />
+                    </View>
+                    <View style={styles.routeText}>
+                      <Text style={styles.routePoint} numberOfLines={1}>
+                        {order.pickup_address ?? 'Pickup location'}
+                      </Text>
+                      <Text style={styles.routePoint} numberOfLines={1}>
+                        {order.dropoff_address ?? 'Drop-off location'}
+                      </Text>
+                    </View>
+                    <Text style={styles.cardPrice}>
+                      {order.price != null ? `₦${Number(order.price).toLocaleString()}` : '—'}
                     </Text>
-                    <Text style={styles.routePoint} numberOfLines={1}>
-                      {order.to}
-                    </Text>
                   </View>
-                  <Text style={styles.cardPrice}>{order.price}</Text>
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
 
-        {/* Promo card */}
         <View style={styles.promo}>
           <View style={styles.promoContent}>
             <Text style={styles.promoEyebrow}>COMING NEXT</Text>
@@ -232,12 +275,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  brand: {
-    fontSize: 24,
-    fontWeight: '900',
-    letterSpacing: -0.5,
-    color: COLORS.onSurface,
-  },
   brandLogo: {
     width: 84,
     height: 30,
@@ -281,6 +318,19 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: COLORS.primary,
   },
+  loader: {
+    marginTop: 48,
+  },
+  empty: {
+    alignItems: 'center',
+    paddingTop: 64,
+    gap: 12,
+  },
+  emptyText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: COLORS.onSurfaceVariant,
+  },
   list: {
     gap: 12,
   },
@@ -291,10 +341,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 14,
     gap: 12,
-  },
-  cardHighlight: {
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.primaryContainer,
   },
   cardPressed: {
     backgroundColor: COLORS.surfaceContainer,
@@ -320,6 +366,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: COLORS.onSurface,
+  },
+  cardTime: {
+    fontSize: 12,
+    color: COLORS.onSurfaceVariant,
+    marginTop: 1,
   },
   statusPill: {
     paddingHorizontal: 10,
@@ -363,11 +414,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.onSurface,
-  },
-  cardTime: {
-    fontSize: 12,
-    color: COLORS.onSurfaceVariant,
-    marginTop: 1,
   },
   cardPrice: {
     fontSize: 16,

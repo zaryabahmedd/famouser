@@ -278,6 +278,54 @@ export function PickupAddress() {
           </View>
         ) : null}
 
+        {/* Precise Address */}
+        <Text style={styles.sectionTitle}>Street Address (Optional)</Text>
+        <View style={styles.field}>
+          <MaterialIcons name="location-on" size={20} color={COLORS.pickup} />
+          <TextInput
+            value={addressSearch.query}
+            onChangeText={addressSearch.onChangeText}
+            placeholder="Enter street address"
+            placeholderTextColor={COLORS.outline}
+            style={styles.input}
+          />
+          {addressSearch.loading ? <ActivityIndicator size="small" color={COLORS.primary} /> : null}
+        </View>
+        {addressSearch.unavailable ? (
+          <Text style={styles.hint}>Address search is temporarily unavailable.</Text>
+        ) : null}
+        {addressSearch.predictions.length > 0 ? (
+          <View style={styles.suggestions}>
+            {addressSearch.predictions.map((p) => (
+              <Pressable
+                key={p.place_id}
+                onPress={async () => {
+                  const place = await addressSearch.select(p);
+                  if (place) {
+                    setPickup(place);
+                    setMapCenter({ lat: place.lat, lng: place.lng });
+                    setMapSpan(0.01);
+                    setAddressResolved(true);
+                  }
+                }}
+                style={({ pressed }) => [styles.suggestion, pressed && styles.suggestionPressed]}
+                accessibilityRole="button">
+                <MaterialIcons name="location-on" size={18} color={COLORS.outline} />
+                <View style={styles.suggestionText}>
+                  <Text style={styles.suggestionMain} numberOfLines={1}>
+                    {p.main_text || p.description}
+                  </Text>
+                  {p.secondary_text ? (
+                    <Text style={styles.suggestionSecondary} numberOfLines={1}>
+                      {p.secondary_text}
+                    </Text>
+                  ) : null}
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+
         {/* Sender contact */}
         <Text style={styles.sectionTitle}>Sender details</Text>
         <View style={styles.field}>

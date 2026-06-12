@@ -41,9 +41,11 @@ export function usePlaceSearch(initialText = '') {
         setUnavailable(false);
       } catch (e) {
         setPredictions([]);
-        if (e instanceof Error && e.message === 'maps_not_configured') {
-          setUnavailable(true);
-        }
+        // Surface any failure (maps_not_configured, REQUEST_DENIED, backend
+        // down, etc.) so the field shows the "unavailable" hint instead of
+        // silently rendering nothing.
+        setUnavailable(true);
+        if (__DEV__) console.warn('[place-search] autocomplete failed:', e);
       } finally {
         setLoading(false);
       }

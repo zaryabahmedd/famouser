@@ -53,10 +53,9 @@ export function DropoffAddress() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { dropoff, setDropoff, updateDropoff } = useDraftOrder();
-  // Two independent autocomplete fields: a city (coarse, pans the map) and the
-  // precise address (geocoded, reveals the fine-tune pin option).
-  const citySearch = usePlaceSearch();
-  const addressSearch = usePlaceSearch(dropoff?.address ?? '');
+  // A single address field: the city autocomplete pans the map and sets the
+  // drop-off location. The user fine-tunes the exact spot with the map pin.
+  const citySearch = usePlaceSearch(dropoff?.address ?? '');
   const [detail, setDetail] = useState(dropoff?.detail ?? '');
   const [name, setName] = useState(dropoff?.contactName ?? '');
   const [phone, setPhone] = useState(dropoff?.contactPhone ?? '');
@@ -81,7 +80,7 @@ export function DropoffAddress() {
       params: {
         mode: 'dropoff',
         ...(dropoff ? { lat: String(dropoff.lat), lng: String(dropoff.lng) } : {}),
-        address: addressSearch.query || dropoff?.address || '',
+        address: citySearch.query || dropoff?.address || '',
       },
     });
   };
@@ -106,7 +105,7 @@ export function DropoffAddress() {
   // Address selected -> geocode, move the map to the exact spot, and reveal the
   // fine-tune pin option.
   const handleRecentSelect = (address: string) => {
-    addressSearch.setQuery(address);
+    citySearch.setQuery(address);
     // Resolve the recent place to precise coordinates in the background.
     autocompletePlaces(address, newPlacesSession())
       .then((results) => {
@@ -132,8 +131,8 @@ export function DropoffAddress() {
       updateDropoff({ lat, lng });
     } else {
       const address =
-        addressSearch.query.trim().length > 0
-          ? addressSearch.query
+        citySearch.query.trim().length > 0
+          ? citySearch.query
           : `Pinned location (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
       setDropoff({ address, lat, lng });
     }
@@ -264,54 +263,6 @@ export function DropoffAddress() {
                 style={({ pressed }) => [styles.suggestion, pressed && styles.suggestionPressed]}
                 accessibilityRole="button">
                 <MaterialIcons name="location-city" size={18} color={COLORS.outline} />
-                <View style={styles.suggestionText}>
-                  <Text style={styles.suggestionMain} numberOfLines={1}>
-                    {p.main_text || p.description}
-                  </Text>
-                  {p.secondary_text ? (
-                    <Text style={styles.suggestionSecondary} numberOfLines={1}>
-                      {p.secondary_text}
-                    </Text>
-                  ) : null}
-                </View>
-              </Pressable>
-            ))}
-          </View>
-        ) : null}
-
-        {/* Precise Address */}
-        <Text style={styles.sectionTitle}>Street Address (Optional)</Text>
-        <View style={styles.field}>
-          <MaterialIcons name="location-on" size={20} color={COLORS.dropoff} />
-          <TextInput
-            value={addressSearch.query}
-            onChangeText={addressSearch.onChangeText}
-            placeholder="Enter street address"
-            placeholderTextColor={COLORS.outline}
-            style={styles.input}
-          />
-          {addressSearch.loading ? <ActivityIndicator size="small" color={COLORS.primary} /> : null}
-        </View>
-        {addressSearch.unavailable ? (
-          <Text style={styles.hint}>Address search is temporarily unavailable.</Text>
-        ) : null}
-        {addressSearch.predictions.length > 0 ? (
-          <View style={styles.suggestions}>
-            {addressSearch.predictions.map((p) => (
-              <Pressable
-                key={p.place_id}
-                onPress={async () => {
-                  const place = await addressSearch.select(p);
-                  if (place) {
-                    setDropoff(place);
-                    setMapCenter({ lat: place.lat, lng: place.lng });
-                    setMapSpan(0.01);
-                    setAddressResolved(true);
-                  }
-                }}
-                style={({ pressed }) => [styles.suggestion, pressed && styles.suggestionPressed]}
-                accessibilityRole="button">
-                <MaterialIcons name="location-on" size={18} color={COLORS.outline} />
                 <View style={styles.suggestionText}>
                   <Text style={styles.suggestionMain} numberOfLines={1}>
                     {p.main_text || p.description}

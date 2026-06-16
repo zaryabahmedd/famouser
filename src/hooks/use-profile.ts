@@ -18,6 +18,7 @@ export type Profile = {
 export type ProfileUpdate = {
   full_name?: string;
   phone_number?: string;
+  avatar_url?: string;
 };
 
 type ProfileContextValue = {
@@ -25,7 +26,13 @@ type ProfileContextValue = {
   loading: boolean;
   reload: () => Promise<void>;
   updateProfile: (update: ProfileUpdate) => Promise<string | null>;
-  uploadAvatar: (base64: string, mimeType?: string) => Promise<string | null>;
+  // Uploads the image to storage and returns its public URL. Does NOT persist it
+  // to the profile — call updateProfile({ avatar_url }) to save it. This keeps a
+  // freshly picked photo from showing app-wide before the user taps "Save".
+  uploadAvatarFile: (
+    base64: string,
+    mimeType?: string,
+  ) => Promise<{ url: string | null; error: string | null }>;
 };
 
 export const ProfileContext = createContext<ProfileContextValue>({
@@ -33,7 +40,7 @@ export const ProfileContext = createContext<ProfileContextValue>({
   loading: true,
   reload: async () => {},
   updateProfile: async () => null,
-  uploadAvatar: async () => null,
+  uploadAvatarFile: async () => ({ url: null, error: null }),
 });
 
 export function useProfile() {
@@ -78,13 +85,17 @@ export function useProfileProvider(): ProfileContextValue {
 
   const updateProfile = useCallback(async (update: ProfileUpdate): Promise<string | null> => {
     const { data: auth } = await supabase.auth.getUser();
-    const userId = auth.user?.id;
-    if (!userId) return 'You must be signed in.';
+    const user = auth.user;
+    if (!user) return 'You must be signed in.';
 
+    // Upsert (not update) so the profile saves even when the user has no
+    // public.users row yet — e.g. accounts created before the row was seeded.
+    // A plain UPDATE would match zero rows and .single() would throw
+    // "Cannot coerce the result to a single JSON object". The id/email are
+    // included so the INSERT path (and its RLS check auth.uid() = id) succeeds.
     const { data, error } = await supabase
       .from('users')
-      .update(update)
-      .eq('id', userId)
+      .upsert({ id: user.id, email: user.email ?? null, ...update }, { onConflict: 'id' })
       .select('id, full_name, email, phone_number, avatar_url')
       .single();
 
@@ -93,33 +104,33 @@ export function useProfileProvider(): ProfileContextValue {
     return null;
   }, []);
 
-  const uploadAvatar = useCallback(async (base64: string, mimeType = 'image/jpeg'): Promise<string | null> => {
-    const { data: auth } = await supabase.auth.getUser();
-    const userId = auth.user?.id;
-    if (!userId) return 'You must be signed in.';
+  // Uploads the picked image to the avatars bucket and returns its public URL.
+  // Intentionally does NOT write users.avatar_url or touch the shared profile —
+  // that only happens when the user saves (via updateProfile), so the new photo
+  // stays local to the Edit Profile screen until then.
+  const uploadAvatarFile = useCallback(
+    async (
+      base64: string,
+      mimeType = 'image/jpeg',
+    ): Promise<{ url: string | null; error: string | null }> => {
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth.user?.id;
+      if (!userId) return { url: null, error: 'You must be signed in.' };
 
-    const ext = mimeType.includes('png') ? 'png' : 'jpg';
-    const path = `${userId}/avatar-${Date.now()}.${ext}`;
-    const bytes = base64ToBytes(base64);
+      const ext = mimeType.includes('png') ? 'png' : 'jpg';
+      const path = `${userId}/avatar-${Date.now()}.${ext}`;
+      const bytes = base64ToBytes(base64);
 
-    const { error: uploadError } = await supabase.storage
-      .from('avatars')
-      .upload(path, bytes, { contentType: mimeType, upsert: true });
-    if (uploadError) return uploadError.message;
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(path, bytes, { contentType: mimeType, upsert: true });
+      if (uploadError) return { url: null, error: uploadError.message };
 
-    const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
-    const publicUrl = pub.publicUrl;
+      const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
+      return { url: pub.publicUrl, error: null };
+    },
+    [],
+  );
 
-    const { data, error } = await supabase
-      .from('users')
-      .update({ avatar_url: publicUrl })
-      .eq('id', userId)
-      .select('id, full_name, email, phone_number, avatar_url')
-      .single();
-    if (error) return error.message;
-    if (data) setProfile(data);
-    return null;
-  }, []);
-
-  return { profile, loading, reload: load, updateProfile, uploadAvatar };
+  return { profile, loading, reload: load, updateProfile, uploadAvatarFile };
 }

@@ -1,5 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useGoBack } from '@/hooks/use-go-back';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
@@ -69,6 +70,8 @@ const TYPE_FOR_FILTER: Record<string, TxType> = {
 export function Wallet() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  const goBack = useGoBack();
   const [filter, setFilter] = useState('All');
 
   const list =
@@ -83,7 +86,7 @@ export function Wallet() {
       {/* Top bar */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={10}
           style={styles.iconButton}
           accessibilityRole="button"

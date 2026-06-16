@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useGoBack } from '@/hooks/use-go-back';
 import { usePlaceSearch } from '@/hooks/use-place-search';
 import { usePricing } from '@/hooks/use-pricing';
 import { getRoute, haversineMeters, type PlaceLocation, type PlacePrediction } from '@/lib/geo';
@@ -55,6 +56,8 @@ function formatPrice(value: number): string {
 export function InstantQuote() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  const goBack = useGoBack();
   const [size, setSize] = useState('M');
   const { perKmPrice } = usePricing();
 
@@ -129,7 +132,7 @@ export function InstantQuote() {
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <View style={styles.headerLeft}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             hitSlop={10}
             style={styles.iconButton}
             accessibilityRole="button"

@@ -6,7 +6,10 @@ export type DeliveryStatus =
   | 'accepted'
   | 'picked_up'
   | 'delivered'
-  | 'cancelled';
+  | 'cancelled'
+  // "Schedule for Later" orders: saved but not yet offered to a rider. The
+  // dispatch trigger ignores this status (it only fires on 'searching').
+  | 'scheduled';
 
 export type Delivery = {
   id: string;
@@ -37,6 +40,8 @@ export type Delivery = {
   // when it arrives at the drop-off location.
   payment_method: 'cod' | 'bank_transfer' | null;
   payment_screenshot_url: string | null;
+  // When set, the pickup time the customer booked for a 'scheduled' order.
+  scheduled_at: string | null;
   accepted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -64,6 +69,10 @@ export type NewDeliveryInput = {
   special_instructions?: string | null;
   payment_method?: 'cod' | 'bank_transfer' | null;
   payment_screenshot_url?: string | null;
+  // Set together for a "Schedule for Later" order: status 'scheduled' keeps it
+  // out of rider dispatch until its time.
+  status?: DeliveryStatus;
+  scheduled_at?: string | null;
 };
 
 // ---- Live-chat contract (must match the rider app) ----

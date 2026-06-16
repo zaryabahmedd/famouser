@@ -20,8 +20,11 @@ export function useCreateDelivery() {
     async (input: NewDeliveryInput): Promise<Delivery | null> => {
       setState({ submitting: true, error: null });
 
-      const { data: auth } = await supabase.auth.getUser();
-      const userId = auth.user?.id;
+      // Use the locally cached session (instant) rather than getUser(), which
+      // makes a network round-trip to the auth server and was the main source of
+      // the "Confirm & Pay" delay.
+      const { data: auth } = await supabase.auth.getSession();
+      const userId = auth.session?.user?.id;
       if (!userId) {
         setState({ submitting: false, error: 'You must be signed in to send a delivery.' });
         return null;
@@ -31,6 +34,10 @@ export function useCreateDelivery() {
         .from('deliveries')
         .insert({
           user_id: userId,
+          // Defaults to immediate dispatch; a scheduled order passes
+          // status: 'scheduled' so the trigger leaves it alone until its time.
+          status: input.status ?? 'searching',
+          scheduled_at: input.scheduled_at ?? null,
           pickup_address: input.pickup_address ?? null,
           pickup_lat: input.pickup_lat,
           pickup_lng: input.pickup_lng,

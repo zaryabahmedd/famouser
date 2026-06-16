@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useGoBack } from '@/hooks/use-go-back';
 import { markChatRead } from '@/hooks/use-chat-unread';
 import { useDeliveryChat } from '@/hooks/use-delivery-chat';
 import { useDeliveryStatus } from '@/hooks/use-delivery-status';
@@ -49,6 +50,8 @@ type RiderInfo = { full_name: string | null };
 export function Chat() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  const goBack = useGoBack();
   const params = useLocalSearchParams<{ deliveryId?: string }>();
   const deliveryId = typeof params.deliveryId === 'string' && params.deliveryId ? params.deliveryId : null;
 
@@ -99,7 +102,7 @@ export function Chat() {
       {/* Top bar */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={10}
           style={styles.iconButton}
           accessibilityRole="button"

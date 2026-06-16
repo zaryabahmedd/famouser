@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useGoBack } from '@/hooks/use-go-back';
 import { supabase } from '@/lib/supabase';
 
 const COLORS = {
@@ -48,6 +49,8 @@ const REASONS = [
 export function CancelDelivery() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  const goBack = useGoBack();
   const params = useLocalSearchParams<{ deliveryId?: string }>();
   const deliveryId = typeof params.deliveryId === 'string' && params.deliveryId ? params.deliveryId : null;
   const [selected, setSelected] = useState<string | null>(null);
@@ -95,7 +98,7 @@ export function CancelDelivery() {
       {/* Top bar */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={10}
           style={styles.iconButton}
           accessibilityRole="button"
@@ -155,7 +158,7 @@ export function CancelDelivery() {
       {/* Footer */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           style={({ pressed }) => [styles.keep, pressed && styles.keepPressed]}
           accessibilityRole="button">
           <Text style={styles.keepText}>Keep delivery</Text>

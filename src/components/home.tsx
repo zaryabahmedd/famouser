@@ -1,8 +1,8 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
     Platform,
     Pressable,
@@ -119,19 +119,27 @@ export function Home() {
   const avatarUri = profile?.avatar_url ?? AVATAR_FALLBACK;
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
 
-  useEffect(() => {
+  // Refetch every time the home screen regains focus (not just on first mount)
+  // so a delivery that finished while the user was elsewhere stops showing as an
+  // active "Track" card the moment they return here.
+  useFocusEffect(
+    useCallback(() => {
     let active = true;
     (async () => {
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData.user?.id;
       if (!userId) return;
 
+      // Only surface the single most recent in-progress delivery on the home
+      // dashboard. The Orders screen is where the full list lives; showing every
+      // active row here floods the home with duplicate "Track" cards.
       const { data } = await supabase
         .from('deliveries')
         .select('*')
         .eq('user_id', userId)
         .in('status', ACTIVE_STATUSES)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(1);
       if (!active) return;
 
       let list = (data as Delivery[]) ?? [];
@@ -169,7 +177,8 @@ export function Home() {
     return () => {
       active = false;
     };
-  }, []);
+    }, []),
+  );
 
   return (
     <View style={styles.root}>

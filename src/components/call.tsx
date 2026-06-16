@@ -1,6 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
+import { useGoBack } from '@/hooks/use-go-back';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -34,6 +35,8 @@ function fmt(total: number) {
 export function Call() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  const goBack = useGoBack();
   const [seconds, setSeconds] = useState(0);
   const [muted, setMuted] = useState(false);
   const [speaker, setSpeaker] = useState(false);
@@ -93,7 +96,7 @@ export function Call() {
         </View>
 
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           style={({ pressed }) => [styles.endBtn, pressed && styles.endBtnPressed]}
           accessibilityRole="button"
           accessibilityLabel="End call">

@@ -1,3 +1,4 @@
+import { useGoBack } from '@/hooks/use-go-back';
 import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/lib/supabase';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -33,6 +34,8 @@ const COLORS = {
 export function DeleteAccount() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  const goBack = useGoBack();
   const { logout } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -79,7 +82,7 @@ export function DeleteAccount() {
       {/* Top bar */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={10}
           style={styles.iconButton}
           accessibilityRole="button"
@@ -179,7 +182,7 @@ export function DeleteAccount() {
           </Pressable>
 
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             style={styles.cancelBtn}
             accessibilityRole="button">
             <Text style={styles.cancelText}>Cancel</Text>

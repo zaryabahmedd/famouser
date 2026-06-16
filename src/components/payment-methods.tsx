@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useGoBack } from '@/hooks/use-go-back';
 import { useDraftOrder, type PaymentMethod, type PaymentReceipt } from '@/hooks/use-draft-order';
 
 const COLORS = {
@@ -63,6 +64,7 @@ const BANK_DETAILS = [
 export function PaymentMethods() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const goBack = useGoBack();
   const { paymentMethod, setPaymentMethod, paymentReceipt, setPaymentReceipt } = useDraftOrder();
   const [selected, setSelected] = useState<PaymentMethod>(paymentMethod ?? 'cod');
   const [receipt, setReceipt] = useState<PaymentReceipt | null>(paymentReceipt);
@@ -93,7 +95,7 @@ export function PaymentMethods() {
       {/* Top bar */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={10}
           style={styles.iconButton}
           accessibilityRole="button"
@@ -185,7 +187,7 @@ export function PaymentMethods() {
           onPress={() => {
             setPaymentMethod(selected);
             setPaymentReceipt(selected === 'bank' ? receipt : null);
-            router.back();
+            goBack();
           }}
           disabled={!canProceed}
           style={({ pressed }) => [

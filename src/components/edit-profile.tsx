@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useGoBack } from '@/hooks/use-go-back';
 import { useProfile } from '@/hooks/use-profile';
 
 const AVATAR_FALLBACK = 'https://randomuser.me/api/portraits/lego/1.jpg';
@@ -39,13 +40,19 @@ const COLORS = {
 export function EditProfile() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { profile, loading, updateProfile, uploadAvatar } = useProfile();
+
+  const goBack = useGoBack();
+  const { profile, loading, updateProfile, uploadAvatarFile } = useProfile();
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  // A photo picked this session but not yet saved. Held locally so it only
+  // previews here — it isn't uploaded or shown app-wide until "Save changes".
+  const [pendingAvatar, setPendingAvatar] = useState<{ base64: string; mimeType: string } | null>(
+    null,
+  );
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
 
   // Hydrate the form once the profile loads.
   useEffect(() => {
@@ -71,16 +78,10 @@ export function EditProfile() {
     if (result.canceled || !result.assets?.length) return;
 
     const asset = result.assets[0];
-    setAvatarUri(asset.uri);
     if (!asset.base64) return;
-
-    setUploading(true);
-    const err = await uploadAvatar(asset.base64, asset.mimeType ?? 'image/jpeg');
-    setUploading(false);
-    if (err) {
-      Alert.alert('Upload failed', err);
-      setAvatarUri(profile?.avatar_url ?? null);
-    }
+    // Preview only — defer the actual upload/save until the user taps Save.
+    setAvatarUri(asset.uri);
+    setPendingAvatar({ base64: asset.base64, mimeType: asset.mimeType ?? 'image/jpeg' });
   };
 
   const handleSave = async () => {
@@ -89,13 +90,32 @@ export function EditProfile() {
       return;
     }
     setSaving(true);
-    const err = await updateProfile({ full_name: name.trim(), phone_number: phone.trim() });
+
+    // Upload the newly picked photo (if any) first, so we can persist its URL as
+    // part of the same profile update.
+    let avatarUrl: string | undefined;
+    if (pendingAvatar) {
+      const { url, error } = await uploadAvatarFile(pendingAvatar.base64, pendingAvatar.mimeType);
+      if (error || !url) {
+        setSaving(false);
+        Alert.alert('Upload failed', error ?? 'Could not upload your photo. Please try again.');
+        return;
+      }
+      avatarUrl = url;
+    }
+
+    const err = await updateProfile({
+      full_name: name.trim(),
+      phone_number: phone.trim(),
+      ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
+    });
     setSaving(false);
     if (err) {
       Alert.alert('Could not save', err);
       return;
     }
-    router.back();
+    setPendingAvatar(null);
+    goBack();
   };
 
   return (
@@ -105,7 +125,7 @@ export function EditProfile() {
       {/* Top bar */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={10}
           style={styles.iconButton}
           accessibilityRole="button"
@@ -127,22 +147,24 @@ export function EditProfile() {
               style={styles.avatar}
               contentFit="cover"
             />
-            {uploading && (
+            {saving && pendingAvatar && (
               <View style={styles.avatarOverlay}>
                 <ActivityIndicator color={COLORS.onPrimaryFixed} />
               </View>
             )}
             <Pressable
               onPress={handlePickPhoto}
-              disabled={uploading}
+              disabled={saving}
               style={styles.cameraBtn}
               accessibilityRole="button"
               accessibilityLabel="Change photo">
               <MaterialIcons name="photo-camera" size={18} color={COLORS.onPrimaryFixed} />
             </Pressable>
           </View>
-          <Pressable onPress={handlePickPhoto} disabled={uploading}>
-            <Text style={styles.changePhoto}>{uploading ? 'Uploading…' : 'Change photo'}</Text>
+          <Pressable onPress={handlePickPhoto} disabled={saving}>
+            <Text style={styles.changePhoto}>
+              {pendingAvatar ? 'Photo selected · tap to change' : 'Change photo'}
+            </Text>
           </Pressable>
         </View>
 

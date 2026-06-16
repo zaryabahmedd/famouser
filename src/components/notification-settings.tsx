@@ -1,5 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useGoBack } from '@/hooks/use-go-back';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
@@ -89,6 +90,8 @@ const DEFAULTS: Record<string, boolean> = {
 export function NotificationSettings() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  const goBack = useGoBack();
   const [toggles, setToggles] = useState<Record<string, boolean>>(DEFAULTS);
 
   const set = (key: string, value: boolean) =>
@@ -119,7 +122,7 @@ export function NotificationSettings() {
       {/* Top bar */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={10}
           style={styles.iconButton}
           accessibilityRole="button"

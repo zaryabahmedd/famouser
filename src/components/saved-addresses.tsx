@@ -1,5 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useGoBack } from '@/hooks/use-go-back';
 import { StatusBar } from 'expo-status-bar';
 import {
     Platform,
@@ -44,6 +45,8 @@ export function SavedAddresses() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
+  const goBack = useGoBack();
+
   return (
     <View style={styles.root}>
       <StatusBar style="dark" />
@@ -51,7 +54,7 @@ export function SavedAddresses() {
       {/* Top bar */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={10}
           style={styles.iconButton}
           accessibilityRole="button"

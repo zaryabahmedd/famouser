@@ -11,6 +11,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView, { PROVIDER_GOOGLE, type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useGoBack } from '@/hooks/use-go-back';
 import { useDraftOrder } from '@/hooks/use-draft-order';
 
 const COLORS = {
@@ -39,6 +40,8 @@ function toNumber(value: string | string[] | undefined): number | null {
 export function MapPicker() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  const goBack = useGoBack();
   const params = useLocalSearchParams<{
     mode?: string;
     lat?: string;
@@ -76,7 +79,7 @@ export function MapPicker() {
     const place = { address, lat: latitude, lng: longitude };
     if (isDropoff) setDropoff(place);
     else setPickup(place);
-    router.back();
+    goBack();
   };
 
   return (
@@ -103,7 +106,7 @@ export function MapPicker() {
       {/* Top bar */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={10}
           style={styles.iconButton}
           accessibilityRole="button"

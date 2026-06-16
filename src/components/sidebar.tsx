@@ -1,9 +1,10 @@
 import { useAuth } from '@/hooks/use-auth';
 import { useProfile } from '@/hooks/use-profile';
+import { supabase } from '@/lib/supabase';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
     Animated,
     Easing,
@@ -78,6 +79,28 @@ export function Sidebar({ visible, onClose }: SidebarProps) {
   const avatarUri = profile?.avatar_url ?? AVATAR_FALLBACK;
   const displayName = profile?.full_name ?? 'Customer';
   const drawerWidth = Math.min(320, width * 0.85);
+
+  // Show a "Schedule" marker next to My Orders only when the user actually has
+  // a scheduled request. Re-checked each time the drawer opens.
+  const [hasScheduled, setHasScheduled] = useState(false);
+  useEffect(() => {
+    if (!visible) return;
+    let active = true;
+    (async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth.user?.id;
+      if (!userId) return;
+      const { count } = await supabase
+        .from('deliveries')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('status', 'scheduled');
+      if (active) setHasScheduled((count ?? 0) > 0);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [visible]);
 
   const translateX = useRef(new Animated.Value(-drawerWidth)).current;
   const overlay = useRef(new Animated.Value(0)).current;
@@ -162,37 +185,36 @@ export function Sidebar({ visible, onClose }: SidebarProps) {
               </View>
             </View>
 
-            {/* Customer ID card */}
-            <View style={styles.idCard}>
-              <View>
-                <Text style={styles.idLabel}>CUSTOMER ID</Text>
-                <Text style={styles.idValue}>#FAM-29384</Text>
-              </View>
-              <MaterialIcons name="qr-code-2" size={28} color={COLORS.outline} />
-            </View>
-
             {/* Navigation */}
             <View style={styles.nav}>
-              {ITEMS.map((item) => (
-                <Pressable
-                  key={item.key}
-                  onPress={() => go(item.route)}
-                  style={({ pressed }) => [
-                    styles.navItem,
-                    item.active && styles.navItemActive,
-                    pressed && !item.active && styles.navItemPressed,
-                  ]}
-                  accessibilityRole="button">
-                  <MaterialIcons
-                    name={item.icon}
-                    size={24}
-                    color={item.active ? COLORS.onPrimaryContainer : COLORS.onSurfaceVariant}
-                  />
-                  <Text style={[styles.navLabel, item.active && styles.navLabelActive]}>
-                    {item.label}
-                  </Text>
-                </Pressable>
-              ))}
+              {ITEMS.map((item) => {
+                const showSchedule = item.key === 'orders' && hasScheduled;
+                return (
+                  <Pressable
+                    key={item.key}
+                    onPress={() => go(item.route)}
+                    style={({ pressed }) => [
+                      styles.navItem,
+                      item.active && styles.navItemActive,
+                      pressed && !item.active && styles.navItemPressed,
+                    ]}
+                    accessibilityRole="button">
+                    <MaterialIcons
+                      name={item.icon}
+                      size={24}
+                      color={item.active ? COLORS.onPrimaryContainer : COLORS.onSurfaceVariant}
+                    />
+                    <Text style={[styles.navLabel, item.active && styles.navLabelActive]}>
+                      {item.label}
+                    </Text>
+                    {showSchedule ? (
+                      <View style={styles.scheduleBadge}>
+                        <MaterialIcons name="event" size={16} color={COLORS.primary} />
+                      </View>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
 
               <View style={styles.divider} />
 
@@ -259,7 +281,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 16,
     paddingHorizontal: 8,
-    marginBottom: 16,
+    marginBottom: 24,
   },
   avatarWrap: {
     position: 'relative',
@@ -301,30 +323,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: COLORS.secondary,
   },
-  idCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: COLORS.surfaceContainerLow,
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 24,
-  },
-  idLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    color: COLORS.outline,
-  },
-  idValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.onSurface,
-    marginTop: 2,
-  },
   nav: {
     gap: 4,
   },
@@ -337,6 +335,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   navItemActive: {
+    backgroundColor: COLORS.primaryContainer,
+  },
+  scheduleBadge: {
+    marginLeft: 'auto',
+    width: 28,
+    height: 28,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: COLORS.primaryContainer,
   },
   navItemPressed: {

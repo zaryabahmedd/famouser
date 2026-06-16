@@ -2,7 +2,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Platform,
@@ -10,11 +10,11 @@ import {
     ScrollView,
     StyleSheet,
     Text,
-    TextInput,
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useGoBack } from '@/hooks/use-go-back';
 import { useCreateDelivery } from '@/hooks/use-create-delivery';
 import { useDraftOrder } from '@/hooks/use-draft-order';
 import { usePricing } from '@/hooks/use-pricing';
@@ -54,7 +54,8 @@ type FareRow = {
 export function QuoteSummary() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [promo, setPromo] = useState('');
+
+  const goBack = useGoBack();
   const { createDelivery, submitting, error } = useCreateDelivery();
   const { basePrice, perKmPrice } = usePricing();
   const {
@@ -67,7 +68,12 @@ export function QuoteSummary() {
     specialInstructions,
     paymentMethod,
     paymentReceipt,
+    scheduledAt,
+    reset,
   } = useDraftOrder();
+
+  // A "Schedule for Later" order was booked on the Pickup Time screen.
+  const isScheduled = scheduledAt != null;
 
   const paymentLabel =
     paymentMethod === 'bank'
@@ -146,16 +152,42 @@ export function QuoteSummary() {
     CATEGORY_LABELS[category] ||
     'Package';
 
+  // Local "busy" state covers the whole submit (including the bank-receipt
+  // upload, which happens before the hook's `submitting` flips). The ref guard
+  // rejects repeat taps synchronously so a slow first tap can never create
+  // duplicate delivery requests.
+  const [busy, setBusy] = useState(false);
+  const submitGuard = useRef(false);
+
+  // Gate the bottom action on a chosen payment method (and a ready price).
+  const canSubmit = !submitting && !busy && price != null && paymentMethod != null && hasRoute;
+
   const handleConfirm = async () => {
-    if (submitting || !pickup || !dropoff || price == null) return;
+    // Synchronous re-entrancy guard: blocks the 2nd..Nth tap before any await,
+    // so multiple presses cannot each fire an insert.
+    if (submitGuard.current) return;
+    if (!canSubmit || !pickup || !dropoff || price == null) return;
+    submitGuard.current = true;
+    setBusy(true);
+
+    try {
+      await submitRequest();
+    } finally {
+      submitGuard.current = false;
+      setBusy(false);
+    }
+  };
+
+  const submitRequest = async () => {
+    if (!pickup || !dropoff || price == null) return;
 
     // Map the draft's UI-level choice to the DB's payment_method values, and
     // upload the bank-transfer receipt (if any) to get a public proof-of-payment URL.
     const paymentMethodForDb = paymentMethod === 'bank' ? 'bank_transfer' : 'cod';
     let paymentScreenshotUrl: string | null = null;
     if (paymentMethod === 'bank' && paymentReceipt) {
-      const { data: auth } = await supabase.auth.getUser();
-      const userId = auth.user?.id;
+      const { data: auth } = await supabase.auth.getSession();
+      const userId = auth.session?.user?.id;
       if (userId) {
         const ext = paymentReceipt.mimeType.includes('png') ? 'png' : 'jpg';
         const path = `${userId}/receipts/receipt-${Date.now()}.${ext}`;
@@ -196,9 +228,21 @@ export function QuoteSummary() {
           .join('\n') || null,
       payment_method: paymentMethodForDb,
       payment_screenshot_url: paymentScreenshotUrl,
+      // Scheduled orders are saved with status 'scheduled' so the dispatch
+      // trigger leaves them alone; immediate ones default to 'searching'.
+      status: isScheduled ? 'scheduled' : 'searching',
+      scheduled_at: scheduledAt,
     });
     if (delivery) {
-      router.push({ pathname: '/finding-rider', params: { deliveryId: delivery.id } });
+      // The request has been sent — the order now lives in the database. Clear the
+      // in-progress draft (pickup/drop-off addresses, contacts, package, payment)
+      // so the next delivery the user starts begins with empty, un-prefilled fields.
+      reset();
+      if (isScheduled) {
+        router.replace({ pathname: '/orders-schedule', params: { deliveryId: delivery.id } });
+      } else {
+        router.push({ pathname: '/finding-rider', params: { deliveryId: delivery.id } });
+      }
     }
   };
 
@@ -209,7 +253,7 @@ export function QuoteSummary() {
       {/* Top bar */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={10}
           style={styles.iconButton}
           accessibilityRole="button"
@@ -296,23 +340,6 @@ export function QuoteSummary() {
           </View>
         )}
 
-        {/* Promo input */}
-        <View style={styles.promoRow}>
-          <TextInput
-            value={promo}
-            onChangeText={setPromo}
-            placeholder="Promo code"
-            placeholderTextColor={COLORS.onSurfaceVariant}
-            style={styles.promoInput}
-            autoCapitalize="characters"
-          />
-          <Pressable
-            style={({ pressed }) => [styles.promoBtn, pressed && styles.pressed]}
-            accessibilityRole="button">
-            <Text style={styles.promoBtnText}>Apply</Text>
-          </Pressable>
-        </View>
-
         {/* Payment method */}
         <Pressable
           onPress={() => router.push('/payment-methods')}
@@ -331,16 +358,31 @@ export function QuoteSummary() {
         {error ? (
           <Text style={{ color: COLORS.error, textAlign: 'center', marginBottom: 8 }}>{error}</Text>
         ) : null}
+        {!hasRoute ? (
+          <Text style={styles.gateHint}>
+            Pickup and drop-off addresses are required. Go back and pick both from the address
+            search.
+          </Text>
+        ) : !paymentMethod ? (
+          <Text style={styles.gateHint}>Select a payment method to continue</Text>
+        ) : null}
         <Pressable
           onPress={handleConfirm}
-          disabled={submitting || price == null}
+          disabled={!canSubmit}
           style={({ pressed }) => [
             styles.confirm,
-            (pressed || submitting || price == null) && styles.pressed,
+            !canSubmit && styles.confirmDisabled,
+            pressed && canSubmit && styles.pressed,
           ]}
           accessibilityRole="button">
-          <Text style={styles.confirmText}>
-            {submitting ? 'Creating request…' : `Confirm & Pay · ${priceLabel}`}
+          <Text style={[styles.confirmText, !canSubmit && styles.confirmTextDisabled]}>
+            {busy || submitting
+              ? isScheduled
+                ? 'Scheduling…'
+                : 'Creating request…'
+              : isScheduled
+                ? 'Continue'
+                : `Confirm & Pay · ${priceLabel}`}
           </Text>
         </Pressable>
       </ScrollView>
@@ -514,35 +556,12 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     color: COLORS.onSurface,
   },
-  promoRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  promoInput: {
-    flex: 1,
-    height: 48,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant,
-    backgroundColor: COLORS.surface,
-    fontSize: 16,
-    color: COLORS.onSurface,
-    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null),
-  },
-  promoBtn: {
-    height: 48,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    backgroundColor: COLORS.surfaceContainerHigh,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  promoBtnText: {
-    fontSize: 14,
+  gateHint: {
+    fontSize: 13,
     fontWeight: '600',
-    letterSpacing: 0.5,
-    color: COLORS.onSurface,
+    color: COLORS.onSurfaceVariant,
+    textAlign: 'center',
+    marginBottom: 8,
   },
   payment: {
     flexDirection: 'row',
@@ -586,10 +605,16 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginTop: 8,
   },
+  confirmDisabled: {
+    backgroundColor: COLORS.surfaceContainerHigh,
+  },
   confirmText: {
     fontSize: 24,
     fontWeight: '700',
     color: COLORS.onPrimaryContainer,
+  },
+  confirmTextDisabled: {
+    color: COLORS.outline,
   },
   pressed: {
     transform: [{ scale: 0.98 }],

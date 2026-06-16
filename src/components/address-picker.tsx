@@ -1,5 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useGoBack } from '@/hooks/use-go-back';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
@@ -51,6 +52,8 @@ const RECENT: Suggestion[] = [
 export function AddressPicker() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  const goBack = useGoBack();
   const [pickup, setPickup] = useState('Victoria Island, Lagos');
   const [dropoff, setDropoff] = useState('');
 
@@ -67,7 +70,7 @@ export function AddressPicker() {
       {/* Top bar */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={10}
           style={styles.iconButton}
           accessibilityRole="button"

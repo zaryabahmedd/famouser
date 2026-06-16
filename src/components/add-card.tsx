@@ -1,5 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useGoBack } from '@/hooks/use-go-back';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
@@ -31,6 +32,8 @@ const COLORS = {
 export function AddCard() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  const goBack = useGoBack();
   const [number, setNumber] = useState('');
   const [name, setName] = useState('');
   const [expiry, setExpiry] = useState('');
@@ -43,7 +46,7 @@ export function AddCard() {
       {/* Top bar */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={10}
           style={styles.iconButton}
           accessibilityRole="button"
@@ -148,7 +151,7 @@ export function AddCard() {
       {/* Save */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           style={({ pressed }) => [styles.save, pressed && styles.savePressed]}
           accessibilityRole="button">
           <Text style={styles.saveText}>Add card</Text>

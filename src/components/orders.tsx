@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomNav } from '@/components/bottom-nav';
+import { Sidebar } from '@/components/sidebar';
 import type { Delivery } from '@/lib/delivery-types';
 import { supabase } from '@/lib/supabase';
 
@@ -43,6 +44,8 @@ const COMPLETED_STATUSES = ['delivered', 'cancelled'];
 
 function getStatusDisplay(status: string) {
   switch (status) {
+    case 'scheduled':
+      return { label: 'Scheduled', bg: '#E9E1FF', color: '#6750A4' };
     case 'searching':
       return { label: 'Finding rider', bg: '#E9E1FF', color: '#6750A4' };
     case 'accepted':
@@ -76,6 +79,7 @@ function orderCode(id: string): string {
 export function Orders() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const [menuOpen, setMenuOpen] = useState(false);
   const [tab, setTab] = useState('Active');
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [loading, setLoading] = useState(true);
@@ -107,17 +111,19 @@ export function Orders() {
   const filtered = deliveries.filter((d) => {
     if (tab === 'Active') return ACTIVE_STATUSES.includes(d.status);
     if (tab === 'Completed') return COMPLETED_STATUSES.includes(d.status);
+    if (tab === 'Scheduled') return d.status === 'scheduled';
     return false;
   });
 
   return (
     <View style={styles.root}>
       <StatusBar style="dark" />
+      <Sidebar visible={menuOpen} onClose={() => setMenuOpen(false)} />
 
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <View style={styles.headerLeft}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => setMenuOpen(true)}
             hitSlop={10}
             style={styles.iconButton}
             accessibilityRole="button"
@@ -175,24 +181,36 @@ export function Orders() {
             {filtered.map((order) => {
               const status = getStatusDisplay(order.status);
               const isActiveOrder = ACTIVE_STATUSES.includes(order.status);
+              const isScheduledOrder = order.status === 'scheduled';
+              const onPress = () => {
+                if (isScheduledOrder) {
+                  router.push({ pathname: '/orders-schedule', params: { deliveryId: order.id } });
+                } else if (isActiveOrder) {
+                  router.push({ pathname: '/live-tracking', params: { deliveryId: order.id } });
+                } else {
+                  router.push({ pathname: '/order-details', params: { deliveryId: order.id } });
+                }
+              };
               return (
                 <Pressable
                   key={order.id}
-                  onPress={() =>
-                    isActiveOrder
-                      ? router.push({ pathname: '/live-tracking', params: { deliveryId: order.id } })
-                      : router.push({ pathname: '/order-details', params: { deliveryId: order.id } })
-                  }
+                  onPress={onPress}
                   style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
                   accessibilityRole="button">
                   <View style={styles.cardTop}>
                     <View style={styles.cardIcon}>
-                      <MaterialIcons name="inventory-2" size={20} color={COLORS.onSurfaceVariant} />
+                      <MaterialIcons
+                        name={isScheduledOrder ? 'event' : 'inventory-2'}
+                        size={20}
+                        color={COLORS.onSurfaceVariant}
+                      />
                     </View>
                     <View style={styles.cardTopText}>
                       <Text style={styles.cardCode}>{orderCode(order.id)}</Text>
                       <Text style={styles.cardTime} numberOfLines={1}>
-                        {formatTime(order.created_at)}
+                        {isScheduledOrder && order.scheduled_at
+                          ? `For ${formatTime(order.scheduled_at)}`
+                          : formatTime(order.created_at)}
                       </Text>
                     </View>
                     <View style={[styles.statusPill, { backgroundColor: status.bg }]}>

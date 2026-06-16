@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useGoBack } from '@/hooks/use-go-back';
 import type { Delivery } from '@/lib/delivery-types';
 import { supabase } from '@/lib/supabase';
 
@@ -95,6 +96,7 @@ function buildTimeline(delivery: Delivery): TimelineStep[] {
 export function OrderDetails() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const goBack = useGoBack();
   const { deliveryId } = useLocalSearchParams<{ deliveryId?: string }>();
 
   const [delivery, setDelivery] = useState<Delivery | null>(null);
@@ -144,7 +146,7 @@ export function OrderDetails() {
     return (
       <View style={[styles.root, styles.center]}>
         <Text style={styles.errorText}>Order not found.</Text>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+        <Pressable onPress={() => goBack()} style={styles.backBtn}>
           <Text style={styles.backBtnText}>Go back</Text>
         </Pressable>
       </View>
@@ -163,7 +165,7 @@ export function OrderDetails() {
 
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={10}
           style={styles.iconButton}
           accessibilityRole="button"

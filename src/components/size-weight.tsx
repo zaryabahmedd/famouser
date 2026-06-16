@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useGoBack } from '@/hooks/use-go-back';
 import { BottomNav } from '@/components/bottom-nav';
 import { useDraftOrder } from '@/hooks/use-draft-order';
 
@@ -45,23 +46,17 @@ const SIZES: Size[] = [
   { key: 'xl', label: 'XL', limit: '≤ 50kg' },
 ];
 
-const MIN_WEIGHT = 0.5;
-const MAX_WEIGHT = 50;
-const STEP = 0.5;
-
 export function SizeWeight() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  const goBack = useGoBack();
   const { size: draftSize, weight: draftWeight, specialInstructions, setPackage } = useDraftOrder();
   const [size, setSize] = useState(draftSize);
-  const [weight, setWeight] = useState(draftWeight);
   const [instructions, setInstructions] = useState(specialInstructions);
 
-  const decrement = () => setWeight((w) => Math.max(MIN_WEIGHT, +(w - STEP).toFixed(1)));
-  const increment = () => setWeight((w) => Math.min(MAX_WEIGHT, +(w + STEP).toFixed(1)));
-
   const handleContinue = () => {
-    setPackage(size, weight, instructions.trim());
+    setPackage(size, draftWeight, instructions.trim());
     router.push('/pickup-time');
   };
 
@@ -72,7 +67,7 @@ export function SizeWeight() {
       {/* Top bar */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={10}
           style={styles.iconButton}
           accessibilityRole="button"
@@ -126,36 +121,11 @@ export function SizeWeight() {
           })}
         </View>
 
-        {/* Weight control */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>APPROX. WEIGHT</Text>
-          <View style={styles.weightRow}>
-            <Pressable
-              onPress={decrement}
-              style={({ pressed }) => [styles.weightBtn, pressed && styles.weightBtnPressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Decrease weight">
-              <MaterialIcons name="remove" size={22} color={COLORS.surface} />
-            </Pressable>
-            <View style={styles.weightValue}>
-              <Text style={styles.weightNumber}>{weight.toFixed(1)}</Text>
-              <Text style={styles.weightUnit}>KG</Text>
-            </View>
-            <Pressable
-              onPress={increment}
-              style={({ pressed }) => [styles.weightBtn, pressed && styles.weightBtnPressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Increase weight">
-              <MaterialIcons name="add" size={22} color={COLORS.surface} />
-            </Pressable>
-          </View>
-        </View>
-
         {/* Suggested vehicle */}
         <View style={styles.vehicle}>
-          <MaterialIcons name="electric-moped" size={24} color={COLORS.primary} />
+          <MaterialIcons name="electric-bike" size={24} color={COLORS.primary} />
           <Text style={styles.vehicleText}>
-            Suggested vehicle: <Text style={styles.vehicleBold}>Electric scooter</Text>
+            Suggested bike: <Text style={styles.vehicleBold}>Electric bike</Text>
           </Text>
         </View>
 
@@ -290,45 +260,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     color: COLORS.onSurfaceVariant,
     marginBottom: 8,
-  },
-  weightRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 28,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(206, 198, 173, 0.2)',
-    backgroundColor: COLORS.surfaceContainerLow,
-  },
-  weightBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 999,
-    backgroundColor: COLORS.onSurface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  weightBtnPressed: {
-    transform: [{ scale: 0.95 }],
-  },
-  weightValue: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 6,
-  },
-  weightNumber: {
-    fontSize: 48,
-    lineHeight: 50,
-    fontWeight: '800',
-    color: COLORS.onSurface,
-  },
-  weightUnit: {
-    fontSize: 18,
-    fontWeight: '600',
-    letterSpacing: 1,
-    color: COLORS.onSurfaceVariant,
-    marginBottom: 6,
   },
   vehicle: {
     flexDirection: 'row',

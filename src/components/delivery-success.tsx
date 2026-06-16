@@ -1,6 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
+import { useGoBack } from '@/hooks/use-go-back';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
@@ -44,6 +45,8 @@ const SUMMARY: SummaryRow[] = [
 export function DeliverySuccess() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  const goBack = useGoBack();
   const [rating, setRating] = useState(0);
 
   return (
@@ -54,7 +57,7 @@ export function DeliverySuccess() {
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <View style={styles.headerLeft}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             hitSlop={10}
             style={styles.iconButton}
             accessibilityRole="button"

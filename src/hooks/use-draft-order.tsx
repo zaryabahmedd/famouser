@@ -42,6 +42,9 @@ type DraftOrder = {
   // Set when the user picks a receipt photo for a bank transfer; cleared when
   // they switch back to COD.
   paymentReceipt: PaymentReceipt | null;
+  // ISO timestamp the customer booked on the Pickup Time screen when choosing
+  // "Schedule for Later". null means "Deliver Now" (immediate dispatch).
+  scheduledAt: string | null;
 };
 
 type DraftOrderContextValue = DraftOrder & {
@@ -53,6 +56,7 @@ type DraftOrderContextValue = DraftOrder & {
   setPackage: (size: string, weight: number, specialInstructions?: string) => void;
   setPaymentMethod: (method: PaymentMethod) => void;
   setPaymentReceipt: (receipt: PaymentReceipt | null) => void;
+  setScheduledAt: (iso: string | null) => void;
   reset: () => void;
 };
 
@@ -66,6 +70,7 @@ const DEFAULT: DraftOrder = {
   specialInstructions: '',
   paymentMethod: null,
   paymentReceipt: null,
+  scheduledAt: null,
 };
 
 const DraftOrderContext = createContext<DraftOrderContextValue | null>(null);
@@ -109,6 +114,10 @@ export function DraftOrderProvider({ children }: { children: React.ReactNode }) 
     setDraft((d) => ({ ...d, paymentReceipt: receipt }));
   }, []);
 
+  const setScheduledAt = useCallback((iso: string | null) => {
+    setDraft((d) => ({ ...d, scheduledAt: iso }));
+  }, []);
+
   const reset = useCallback(() => setDraft(DEFAULT), []);
 
   const value = useMemo<DraftOrderContextValue>(
@@ -122,6 +131,7 @@ export function DraftOrderProvider({ children }: { children: React.ReactNode }) 
       setPackage,
       setPaymentMethod,
       setPaymentReceipt,
+      setScheduledAt,
       reset,
     }),
     [
@@ -134,6 +144,7 @@ export function DraftOrderProvider({ children }: { children: React.ReactNode }) 
       setPackage,
       setPaymentMethod,
       setPaymentReceipt,
+      setScheduledAt,
       reset,
     ],
   );

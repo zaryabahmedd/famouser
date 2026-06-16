@@ -14,10 +14,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useGoBack } from '@/hooks/use-go-back';
 import { BottomNav } from '@/components/bottom-nav';
 import { useDraftOrder } from '@/hooks/use-draft-order';
+import { useProfile } from '@/hooks/use-profile';
 
-const AVATAR_URI = 'https://randomuser.me/api/portraits/men/32.jpg';
+const AVATAR_FALLBACK = 'https://randomuser.me/api/portraits/lego/1.jpg';
 
 const COLORS = {
   surface: '#ffffff',
@@ -50,9 +52,14 @@ const CATEGORIES: Category[] = [
 export function Schedule() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  const goBack = useGoBack();
   const { category, categoryDescription, setCategory } = useDraftOrder();
+  const { profile } = useProfile();
   const [selected, setSelected] = useState<string>(category || 'fragile');
   const [otherText, setOtherText] = useState(categoryDescription);
+
+  const avatarUri = profile?.avatar_url ?? AVATAR_FALLBACK;
 
   const isOther = selected === 'other';
 
@@ -69,7 +76,7 @@ export function Schedule() {
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <View style={styles.headerLeft}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             hitSlop={10}
             style={styles.backButton}
             accessibilityRole="button"
@@ -84,7 +91,7 @@ export function Schedule() {
           />
         </View>
         <View style={styles.avatarWrap}>
-          <Image source={{ uri: AVATAR_URI }} style={styles.avatar} contentFit="cover" />
+          <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" />
         </View>
       </View>
 

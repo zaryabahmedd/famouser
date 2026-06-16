@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    Alert,
     KeyboardAvoidingView,
     Platform,
     Pressable,
@@ -17,8 +18,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MapPreview } from '@/components/map-preview';
 import { useDraftOrder } from '@/hooks/use-draft-order';
+import { useKeyboardScroll } from '@/hooks/use-keyboard-scroll';
 import { usePlaceSearch } from '@/hooks/use-place-search';
-import { autocompletePlaces, geocodeAddress, getPlaceDetails, newPlacesSession } from '@/lib/geo';
+import { geocodeAddress } from '@/lib/geo';
+import { sanitizeName, sanitizePhone } from '@/lib/input-sanitize';
 
 const COLORS = {
   surface: '#ffffff',
@@ -38,21 +41,10 @@ const COLORS = {
   pickupContainer: '#c8f0d4',
 };
 
-type SavedPlace = {
-  key: string;
-  icon: keyof typeof MaterialIcons.glyphMap;
-  label: string;
-  address: string;
-};
-
-const SAVED: SavedPlace[] = [
-  { key: 'home', icon: 'home', label: 'Home', address: 'House 21, DHA Phase 5, Lahore' },
-  { key: 'work', icon: 'work', label: 'Work', address: 'Office 12, Gulberg III, Lahore' },
-];
-
 export function PickupAddress() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { scrollRef, onScroll, registerField, focusField, keyboardPadding } = useKeyboardScroll();
   const { pickup, setPickup, updatePickup } = useDraftOrder();
   // A single address field: the city autocomplete pans the map and sets the
   // pickup location. The user fine-tunes the exact spot with the map pin.
@@ -70,9 +62,9 @@ export function PickupAddress() {
   // option so it only appears after the map has navigated to the address.
   const [addressResolved, setAddressResolved] = useState(!!pickup);
 
-  // The Continue button is always enabled; handleContinue resolves any missing
-  // location via geocoding/map pin before advancing.
-  const canContinue = true;
+  // City, sender name, and sender phone must all be filled before continuing.
+  const isComplete =
+    citySearch.query.trim().length > 0 && name.trim().length > 0 && phone.trim().length > 0;
 
   const openMapPicker = () => {
     router.push({
@@ -100,29 +92,6 @@ export function PickupAddress() {
       setMapSpan(0.05);
       setAddressResolved(true);
     }
-  };
-
-  // Address selected -> geocode, move the map to the exact spot, and reveal the
-  // fine-tune pin option.
-  const handleSavedSelect = (address: string) => {
-    citySearch.setQuery(address);
-    // Resolve the saved place to precise coordinates in the background.
-    autocompletePlaces(address, newPlacesSession())
-      .then((results) => {
-        if (results.length > 0) {
-          getPlaceDetails(results[0].place_id, newPlacesSession())
-            .then((place) => {
-              if (place) {
-                setPickup(place);
-                setMapCenter({ lat: place.lat, lng: place.lng });
-                setMapSpan(0.01);
-                setAddressResolved(true);
-              }
-            })
-            .catch(() => {});
-        }
-      })
-      .catch(() => {});
   };
 
   const handlePinMove = (lat: number, lng: number) => {
@@ -161,14 +130,58 @@ export function PickupAddress() {
     return () => clearTimeout(t);
   }, [citySearch.query]);
 
+  const [resolving, setResolving] = useState(false);
+
   const handleContinue = async () => {
-    // Fall back to the map center if the user only moved the pin without a city.
-    if (!pickup && mapCenter) {
-      setPickup({
+    if (!isComplete) {
+      Alert.alert('Missing information', 'You must fill information above');
+      return;
+    }
+
+    // The Continue gate only checks that the text fields are filled — it does
+    // not guarantee real coordinates were resolved (the auto-geocode is debounced
+    // and may not have run yet, or a tap-to-suggest was skipped). Without coords
+    // the draft pickup is null, the fare can't be computed, and Quote Summary's
+    // button stays disabled forever. So make sure we have a located point here.
+    let located = pickup;
+
+    // Prefer the map pin if the user moved it without selecting a city.
+    if (!located && mapCenter) {
+      const pinned = {
         address: `Pinned location (${mapCenter.lat.toFixed(5)}, ${mapCenter.lng.toFixed(5)})`,
         lat: mapCenter.lat,
         lng: mapCenter.lng,
-      });
+      };
+      setPickup(pinned);
+      located = { ...pinned };
+    }
+
+    // Otherwise geocode the typed address right now (synchronously) so we never
+    // advance with an unlocated pickup.
+    if (!located) {
+      const q = citySearch.query.trim();
+      if (q.length > 0) {
+        setResolving(true);
+        try {
+          const place = await geocodeAddress(q);
+          if (place?.lat != null) {
+            setPickup({ address: place.address || q, lat: place.lat, lng: place.lng });
+            located = { address: place.address || q, lat: place.lat, lng: place.lng };
+          }
+        } catch {
+          // fall through to the alert below
+        } finally {
+          setResolving(false);
+        }
+      }
+    }
+
+    if (!located) {
+      Alert.alert(
+        'Location not found',
+        'We could not locate that address. Pick it from the suggestions list or set it on the map.',
+      );
+      return;
     }
 
     updatePickup({ contactName: name, contactPhone: phone, notes });
@@ -184,7 +197,7 @@ export function PickupAddress() {
       {/* Top bar */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/schedule'))}
           hitSlop={10}
           style={styles.iconButton}
           accessibilityRole="button"
@@ -205,7 +218,13 @@ export function PickupAddress() {
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
+        ref={scrollRef}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + 24 + keyboardPadding },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled">
         {/* Map preview */}
@@ -220,30 +239,14 @@ export function PickupAddress() {
           spanDelta={mapSpan}
         />
 
-        {/* Saved places */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.savedRow}>
-          {SAVED.map((place) => (
-            <Pressable
-              key={place.key}
-              onPress={() => handleSavedSelect(place.address)}
-              style={({ pressed }) => [styles.savedChip, pressed && styles.savedChipPressed]}
-              accessibilityRole="button">
-              <MaterialIcons name={place.icon} size={18} color={COLORS.primary} />
-              <Text style={styles.savedChipText}>{place.label}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-
         {/* City */}
         <Text style={styles.sectionTitle}>Enter City (Pickup Location)</Text>
-        <View style={styles.field}>
+        <View style={styles.field} onLayout={registerField('city')}>
           <MaterialIcons name="location-city" size={20} color={COLORS.pickup} />
           <TextInput
             value={citySearch.query}
             onChangeText={citySearch.onChangeText}
+            onFocus={() => focusField('city')}
             placeholder="Enter Your Address"
             placeholderTextColor={COLORS.outline}
             style={styles.input}
@@ -279,21 +282,24 @@ export function PickupAddress() {
 
         {/* Sender contact */}
         <Text style={styles.sectionTitle}>Sender details</Text>
-        <View style={styles.field}>
+        <View style={styles.field} onLayout={registerField('senderName')}>
           <MaterialIcons name="person" size={20} color={COLORS.outline} />
           <TextInput
             value={name}
-            onChangeText={setName}
+            onChangeText={(text) => setName(sanitizeName(text))}
+            onFocus={() => focusField('senderName')}
             placeholder="Sender name"
             placeholderTextColor={COLORS.outline}
+            autoCapitalize="words"
             style={styles.input}
           />
         </View>
-        <View style={styles.field}>
+        <View style={styles.field} onLayout={registerField('senderPhone')}>
           <MaterialIcons name="call" size={20} color={COLORS.outline} />
           <TextInput
             value={phone}
-            onChangeText={setPhone}
+            onChangeText={(text) => setPhone(sanitizePhone(text))}
+            onFocus={() => focusField('senderPhone')}
             placeholder="Phone number"
             placeholderTextColor={COLORS.outline}
             keyboardType="phone-pad"
@@ -303,29 +309,32 @@ export function PickupAddress() {
 
         {/* Notes */}
         <Text style={styles.sectionTitle}>Pickup instructions</Text>
-        <View style={[styles.field, styles.fieldNote]}>
+        <View style={[styles.field, styles.fieldNote]} onLayout={registerField('notes')}>
           <TextInput
             value={notes}
             onChangeText={setNotes}
+            onFocus={() => focusField('notes')}
             placeholder="e.g. Call when you arrive at the gate"
             placeholderTextColor={COLORS.outline}
             style={[styles.input, styles.inputNote]}
             multiline
+            returnKeyType="done"
+            blurOnSubmit={true}
           />
         </View>
 
         {/* Continue */}
         <Pressable
-          disabled={!canContinue}
           onPress={handleContinue}
+          disabled={resolving}
           style={({ pressed }) => [
             styles.next,
-            !canContinue && styles.nextDisabled,
-            pressed && canContinue && styles.nextPressed,
+            (!isComplete || resolving) && styles.nextDisabled,
+            pressed && isComplete && !resolving && styles.nextPressed,
           ]}
           accessibilityRole="button">
-          <Text style={[styles.nextText, !canContinue && styles.nextTextDisabled]}>
-            Continue to drop-off
+          <Text style={[styles.nextText, !isComplete && styles.nextTextDisabled]}>
+            {resolving ? 'Locating address…' : 'Continue to drop-off'}
           </Text>
         </Pressable>
       </ScrollView>
@@ -440,29 +449,6 @@ const styles = StyleSheet.create({
   },
   mapBtnText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.onSurface,
-  },
-  savedRow: {
-    gap: 10,
-    paddingTop: 16,
-  },
-  savedChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: COLORS.surfaceContainerLow,
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant,
-  },
-  savedChipPressed: {
-    opacity: 0.8,
-  },
-  savedChipText: {
-    fontSize: 14,
     fontWeight: '600',
     color: COLORS.onSurface,
   },

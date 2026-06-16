@@ -1,3 +1,4 @@
+import { useGoBack } from '@/hooks/use-go-back';
 import { useAuth } from '@/hooks/use-auth';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -54,6 +55,8 @@ const MENU: MenuItem[] = [
 export function UserProfile() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  const goBack = useGoBack();
   const { logout } = useAuth();
   const { profile, reload } = useProfile();
 
@@ -75,7 +78,7 @@ export function UserProfile() {
       {/* Top bar */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={10}
           style={styles.iconButton}
           accessibilityRole="button"

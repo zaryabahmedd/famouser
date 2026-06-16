@@ -1,7 +1,8 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useGoBack } from '@/hooks/use-go-back';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
     Platform,
     Pressable,
@@ -11,6 +12,8 @@ import {
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { useDraftOrder } from '@/hooks/use-draft-order';
 
 const COLORS = {
   surface: '#ffffff',
@@ -32,30 +35,117 @@ const COLORS = {
 
 type Mode = 'now' | 'later';
 
-type DayOption = {
-  key: string;
-  day: string;
-  date: string;
-  weekend?: boolean;
-};
-
-const DAYS: DayOption[] = [
-  { key: 'tue', day: 'Tue', date: '14' },
-  { key: 'wed', day: 'Wed', date: '15' },
-  { key: 'thu', day: 'Thu', date: '16' },
-  { key: 'fri', day: 'Fri', date: '17' },
-  { key: 'sat', day: 'Sat', date: '18' },
-  { key: 'sun', day: 'Sun', date: '19', weekend: true },
+const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-const SLOTS = ['09:30', '10:00', '10:30', '11:00', '11:30', '12:00'];
+function sameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+// Builds the cells for a month grid: leading nulls pad to the first weekday,
+// then the day numbers. Trailing nulls aren't needed (the grid wraps).
+function buildMonthCells(year: number, month: number): (number | null)[] {
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < firstWeekday; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  return cells;
+}
 
 export function PickupTime() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const goBack = useGoBack();
+  const { setScheduledAt } = useDraftOrder();
+
   const [mode, setMode] = useState<Mode>('now');
-  const [selectedDay, setSelectedDay] = useState('wed');
-  const [selectedSlot, setSelectedSlot] = useState('10:30');
+
+  // Calendar state: which month is on screen, and the chosen day.
+  const today = useMemo(() => new Date(), []);
+  // Midnight today — anything strictly before this is in the past and can't be
+  // scheduled. Memoized so the comparison is stable across renders.
+  const startOfToday = useMemo(() => {
+    const d = new Date(today);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, [today]);
+  const [viewYear, setViewYear] = useState(today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(today.getMonth());
+  const [selectedDate, setSelectedDate] = useState<Date>(today);
+
+  // Can't page back past the current month — there are no schedulable days there.
+  const canGoPrevMonth =
+    viewYear > today.getFullYear() ||
+    (viewYear === today.getFullYear() && viewMonth > today.getMonth());
+
+  // Custom time picker state (12-hour clock). Defaults to the current time.
+  const initialHour12 = today.getHours() % 12 === 0 ? 12 : today.getHours() % 12;
+  const [hour, setHour] = useState(initialHour12);
+  const [minute, setMinute] = useState(today.getMinutes());
+  const [period, setPeriod] = useState<'AM' | 'PM'>(today.getHours() >= 12 ? 'PM' : 'AM');
+
+  const cells = useMemo(() => buildMonthCells(viewYear, viewMonth), [viewYear, viewMonth]);
+
+  const goPrevMonth = () => {
+    if (!canGoPrevMonth) return;
+    if (viewMonth === 0) {
+      setViewMonth(11);
+      setViewYear((y) => y - 1);
+    } else {
+      setViewMonth((m) => m - 1);
+    }
+  };
+  const goNextMonth = () => {
+    if (viewMonth === 11) {
+      setViewMonth(0);
+      setViewYear((y) => y + 1);
+    } else {
+      setViewMonth((m) => m + 1);
+    }
+  };
+
+  const stepHour = (dir: 1 | -1) => setHour((h) => ((h - 1 + dir + 12) % 12) + 1);
+  const stepMinute = (dir: 1 | -1) => setMinute((m) => (m + dir + 60) % 60);
+  const togglePeriod = () => setPeriod((p) => (p === 'AM' ? 'PM' : 'AM'));
+
+  // Compose the chosen date + 12-hour time into a real Date.
+  const buildScheduledDate = (): Date => {
+    let hour24 = hour % 12;
+    if (period === 'PM') hour24 += 12;
+    const d = new Date(selectedDate);
+    d.setHours(hour24, minute, 0, 0);
+    return d;
+  };
+
+  const scheduleSummary = useMemo(() => {
+    const d = buildScheduledDate();
+    const dateStr = d.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+    const timeStr = `${hour}:${String(minute).padStart(2, '0')} ${period}`;
+    return `${dateStr} · ${timeStr}`;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate, hour, minute, period]);
+
+  const handleContinue = () => {
+    if (mode === 'now') {
+      setScheduledAt(null);
+    } else {
+      setScheduledAt(buildScheduledDate().toISOString());
+    }
+    router.push('/quote-summary');
+  };
 
   return (
     <View style={styles.root}>
@@ -64,7 +154,7 @@ export function PickupTime() {
       {/* Top bar */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={10}
           style={styles.iconButton}
           accessibilityRole="button"
@@ -135,66 +225,149 @@ export function PickupTime() {
           </View>
         </Pressable>
 
-        {/* Date & time picker */}
+        {/* Calendar + time picker */}
         {mode === 'later' ? (
           <View style={styles.picker}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.dayScroller}>
-              {DAYS.map((d) => {
-                const isSelected = selectedDay === d.key;
+            {/* Month navigation */}
+            <View style={styles.calHeader}>
+              <Pressable
+                onPress={goPrevMonth}
+                disabled={!canGoPrevMonth}
+                hitSlop={8}
+                style={[styles.calNavBtn, !canGoPrevMonth && styles.calNavBtnDisabled]}
+                accessibilityRole="button"
+                accessibilityLabel="Previous month">
+                <MaterialIcons
+                  name="chevron-left"
+                  size={24}
+                  color={canGoPrevMonth ? COLORS.onSurface : COLORS.outlineVariant}
+                />
+              </Pressable>
+              <Text style={styles.calMonth}>
+                {MONTHS[viewMonth]} {viewYear}
+              </Text>
+              <Pressable
+                onPress={goNextMonth}
+                hitSlop={8}
+                style={styles.calNavBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Next month">
+                <MaterialIcons name="chevron-right" size={24} color={COLORS.onSurface} />
+              </Pressable>
+            </View>
+
+            {/* Weekday labels */}
+            <View style={styles.weekRow}>
+              {WEEKDAYS.map((w) => (
+                <Text key={w} style={styles.weekday}>
+                  {w}
+                </Text>
+              ))}
+            </View>
+
+            {/* Day grid */}
+            <View style={styles.grid}>
+              {cells.map((day, i) => {
+                if (day == null) {
+                  return <View key={`blank-${i}`} style={styles.dayCell} />;
+                }
+                const cellDate = new Date(viewYear, viewMonth, day);
+                const isSelected = sameDay(cellDate, selectedDate);
+                const isToday = sameDay(cellDate, today);
+                // Past days can't be scheduled — show them greyed and inert.
+                const isPast = cellDate < startOfToday;
                 return (
                   <Pressable
-                    key={d.key}
-                    onPress={() => setSelectedDay(d.key)}
-                    style={[styles.dayCell, isSelected && styles.dayCellSelected]}
-                    accessibilityRole="button">
-                    <Text style={styles.dayName}>{d.day}</Text>
-                    <Text style={[styles.dayDate, d.weekend && styles.dayDateWeekend]}>
-                      {d.date}
-                    </Text>
-                    {isSelected ? <View style={styles.dayDot} /> : null}
+                    key={day}
+                    onPress={() => setSelectedDate(cellDate)}
+                    disabled={isPast}
+                    style={styles.dayCell}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected, disabled: isPast }}>
+                    <View style={[styles.dayInner, isSelected && styles.dayInnerSelected]}>
+                      <Text
+                        style={[
+                          styles.dayText,
+                          isToday && !isSelected && styles.dayTextToday,
+                          isSelected && styles.dayTextSelected,
+                          isPast && styles.dayTextPast,
+                        ]}>
+                        {day}
+                      </Text>
+                    </View>
                   </Pressable>
                 );
               })}
-            </ScrollView>
+            </View>
 
             <View style={styles.pickerDivider} />
 
-            <View style={styles.slotsSection}>
-              <View style={styles.slotsHeader}>
-                <Text style={styles.slotsTitle}>Available slots</Text>
-                <Text style={styles.slotsDate}>May 15, 2024</Text>
-              </View>
-              <View style={styles.slotGrid}>
-                {SLOTS.map((slot) => {
-                  const isSelected = selectedSlot === slot;
-                  return (
-                    <Pressable
-                      key={slot}
-                      onPress={() => setSelectedSlot(slot)}
-                      style={[styles.slot, isSelected && styles.slotSelected]}
-                      accessibilityRole="button">
-                      <Text style={[styles.slotText, isSelected && styles.slotTextSelected]}>
-                        {slot}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
+            {/* Custom time picker */}
+            <Text style={styles.timeLabel}>Pickup time</Text>
+            <View style={styles.timeRow}>
+              <TimeColumn
+                value={String(hour)}
+                onUp={() => stepHour(1)}
+                onDown={() => stepHour(-1)}
+                label="Hour"
+              />
+              <Text style={styles.timeColon}>:</Text>
+              <TimeColumn
+                value={String(minute).padStart(2, '0')}
+                onUp={() => stepMinute(1)}
+                onDown={() => stepMinute(-1)}
+                label="Min"
+              />
+              <Pressable
+                onPress={togglePeriod}
+                style={styles.periodToggle}
+                accessibilityRole="button"
+                accessibilityLabel={`Toggle AM/PM, currently ${period}`}>
+                <Text style={styles.periodText}>{period}</Text>
+                <MaterialIcons name="unfold-more" size={18} color={COLORS.onSurfaceVariant} />
+              </Pressable>
             </View>
+
+            <Text style={styles.scheduleSummary}>{scheduleSummary}</Text>
           </View>
         ) : null}
 
         {/* Continue */}
         <Pressable
-          onPress={() => router.push('/quote-summary')}
+          onPress={handleContinue}
           style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
           accessibilityRole="button">
           <Text style={styles.ctaText}>Continue</Text>
         </Pressable>
       </ScrollView>
+    </View>
+  );
+}
+
+// One up/value/down stepper column used for hour and minute.
+function TimeColumn({
+  value,
+  onUp,
+  onDown,
+  label,
+}: {
+  value: string;
+  onUp: () => void;
+  onDown: () => void;
+  label: string;
+}) {
+  return (
+    <View style={styles.timeCol}>
+      <Pressable onPress={onUp} hitSlop={8} style={styles.stepBtn} accessibilityRole="button">
+        <MaterialIcons name="keyboard-arrow-up" size={28} color={COLORS.onSurfaceVariant} />
+      </Pressable>
+      <View style={styles.timeValueBox}>
+        <Text style={styles.timeValue}>{value}</Text>
+      </View>
+      <Pressable onPress={onDown} hitSlop={8} style={styles.stepBtn} accessibilityRole="button">
+        <MaterialIcons name="keyboard-arrow-down" size={28} color={COLORS.onSurfaceVariant} />
+      </Pressable>
+      <Text style={styles.timeColLabel}>{label}</Text>
     </View>
   );
 }
@@ -328,105 +501,166 @@ const styles = StyleSheet.create({
   picker: {
     backgroundColor: COLORS.surfaceLowest,
     borderRadius: 24,
-    padding: 8,
+    padding: 16,
     borderWidth: 1,
     borderColor: 'rgba(206, 198, 173, 0.3)',
     marginTop: 8,
     marginBottom: 32,
   },
-  dayScroller: {
-    gap: 8,
-    paddingVertical: 16,
-    paddingHorizontal: 8,
+  calHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    marginBottom: 12,
   },
-  dayCell: {
-    width: 56,
-    height: 80,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(206, 198, 173, 0.2)',
+  calNavBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
+    backgroundColor: COLORS.surfaceContainerLow,
   },
-  dayCellSelected: {
-    borderWidth: 2,
-    borderColor: COLORS.primaryContainer,
-    backgroundColor: 'rgba(253, 224, 71, 0.1)',
+  calNavBtnDisabled: {
+    opacity: 0.4,
   },
-  dayName: {
-    fontSize: 10,
+  calMonth: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.onSurface,
+  },
+  weekRow: {
+    flexDirection: 'row',
+    marginBottom: 4,
+  },
+  weekday: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
     color: COLORS.onSurfaceVariant,
   },
-  dayDate: {
-    fontSize: 18,
-    fontWeight: '700',
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  dayCell: {
+    width: `${100 / 7}%`,
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayInner: {
+    width: 36,
+    height: 36,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayInnerSelected: {
+    backgroundColor: COLORS.primaryContainer,
+  },
+  dayText: {
+    fontSize: 15,
+    fontWeight: '600',
     color: COLORS.onSurface,
   },
-  dayDateWeekend: {
-    color: COLORS.error,
+  dayTextToday: {
+    color: COLORS.primary,
+    fontWeight: '800',
   },
-  dayDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 999,
-    backgroundColor: COLORS.primary,
-    marginTop: 2,
+  dayTextSelected: {
+    color: COLORS.onPrimaryContainer,
+    fontWeight: '800',
+  },
+  dayTextPast: {
+    color: COLORS.outlineVariant,
+    fontWeight: '500',
   },
   pickerDivider: {
     height: 1,
-    backgroundColor: 'rgba(206, 198, 173, 0.2)',
-    marginHorizontal: 16,
+    backgroundColor: 'rgba(206, 198, 173, 0.25)',
+    marginVertical: 16,
   },
-  slotsSection: {
-    padding: 16,
-  },
-  slotsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  slotsTitle: {
+  timeLabel: {
     fontSize: 14,
     fontWeight: '600',
     letterSpacing: 0.5,
     color: COLORS.onSurface,
+    marginBottom: 12,
+    paddingHorizontal: 4,
   },
-  slotsDate: {
-    fontSize: 12,
-    color: COLORS.onSurfaceVariant,
-  },
-  slotGrid: {
+  timeRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
   },
-  slot: {
-    width: '31.5%',
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(206, 198, 173, 0.2)',
+  timeCol: {
+    alignItems: 'center',
+    gap: 2,
+  },
+  stepBtn: {
+    width: 44,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  slotSelected: {
-    borderWidth: 2,
-    borderColor: COLORS.primaryContainer,
-    backgroundColor: 'rgba(253, 224, 71, 0.05)',
+  timeValueBox: {
+    width: 64,
+    height: 56,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
+    backgroundColor: COLORS.surfaceContainerLow,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  slotText: {
+  timeValue: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: COLORS.onSurface,
+  },
+  timeColLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    color: COLORS.onSurfaceVariant,
+    marginTop: 2,
+  },
+  timeColon: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: COLORS.onSurfaceVariant,
+    marginBottom: 18,
+  },
+  periodToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginLeft: 8,
+    marginBottom: 18,
+    paddingHorizontal: 14,
+    height: 56,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
+    backgroundColor: COLORS.surfaceContainerLow,
+  },
+  periodText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.onSurface,
+  },
+  scheduleSummary: {
+    marginTop: 16,
+    textAlign: 'center',
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.onSurface,
-    opacity: 0.6,
-  },
-  slotTextSelected: {
-    fontWeight: '700',
-    opacity: 1,
+    color: COLORS.primary,
   },
   cta: {
     height: 56,

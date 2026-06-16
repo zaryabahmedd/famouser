@@ -9,7 +9,7 @@ import { Onboarding } from '@/components/onboarding';
 import { SignUpFlow } from '@/components/sign-up-flow';
 import { AuthContext } from '@/hooks/use-auth';
 import { DraftOrderProvider } from '@/hooks/use-draft-order';
-import { getSavedRoute, clearSavedRoute, useSaveRoute } from '@/hooks/use-nav-persistence';
+import { getResumeRoute, clearSavedRoute, useSaveRoute } from '@/hooks/use-nav-persistence';
 import { ProfileContext, useProfileProvider } from '@/hooks/use-profile';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { supabase } from '@/lib/supabase';
@@ -47,11 +47,13 @@ export default function TabLayout() {
     AsyncStorage.setItem(ONBOARDING_KEY, 'true').catch(() => {});
   };
 
-  // Restore the last screen once per cold-start, after auth is confirmed.
+  // Resume once per cold-start, after auth is confirmed: prefer an in-progress
+  // delivery's live tracking screen (authoritative from the DB), otherwise fall
+  // back to the last screen the user was on.
   useEffect(() => {
     if (!authDone || restoredRef.current) return;
     restoredRef.current = true;
-    getSavedRoute().then((route) => {
+    getResumeRoute().then((route) => {
       if (route) router.replace(route as Parameters<typeof router.replace>[0]);
     });
   }, [authDone, router]);

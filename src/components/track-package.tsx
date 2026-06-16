@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useGoBack } from '@/hooks/use-go-back';
 import type { Delivery } from '@/lib/delivery-types';
 import { supabase } from '@/lib/supabase';
 
@@ -73,6 +74,8 @@ function parseTrackingCode(input: string): string | null {
 export function TrackPackage() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  const goBack = useGoBack();
   const [trackingId, setTrackingId] = useState('');
   const [searching, setSearching] = useState(false);
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
@@ -145,7 +148,7 @@ export function TrackPackage() {
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <View style={styles.headerLeft}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             hitSlop={10}
             style={styles.iconButton}
             accessibilityRole="button"

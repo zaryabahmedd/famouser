@@ -67,8 +67,25 @@ export function useDeliveryStatus(deliveryId: string | null | undefined) {
       )
       .subscribe();
 
+    // Polling fallback: realtime can drop events (RLS filtering, a backgrounded
+    // socket, flaky networks). Re-fetch the row every few seconds so a status
+    // change like searching -> accepted is always picked up and the user is
+    // never left stranded on "Finding your rider" after a rider accepts.
+    const poll = setInterval(() => {
+      supabase
+        .from('deliveries')
+        .select('*')
+        .eq('id', deliveryId)
+        .single()
+        .then(({ data, error }) => {
+          if (!active || error || !data) return;
+          setState({ delivery: data as Delivery, loading: false, error: null });
+        });
+    }, 4000);
+
     return () => {
       active = false;
+      clearInterval(poll);
       supabase.removeChannel(channel);
     };
   }, [deliveryId]);

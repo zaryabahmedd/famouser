@@ -2,6 +2,7 @@
 // we show a short message and let the user return to the address form.
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useGoBack } from '@/hooks/use-go-back';
 import { StatusBar } from 'expo-status-bar';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,6 +18,8 @@ const COLORS = {
 export function MapPicker() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  const goBack = useGoBack();
   const params = useLocalSearchParams<{ mode?: string }>();
   const isDropoff = params.mode === 'dropoff';
 
@@ -25,7 +28,7 @@ export function MapPicker() {
       <StatusBar style="dark" />
       <View style={styles.header}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={10}
           style={styles.iconButton}
           accessibilityRole="button"
@@ -45,7 +48,7 @@ export function MapPicker() {
           address in the search field instead.
         </Text>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           style={({ pressed }) => [styles.confirm, pressed && styles.confirmPressed]}
           accessibilityRole="button">
           <Text style={styles.confirmText}>Back to address</Text>

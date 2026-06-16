@@ -1,3 +1,4 @@
+import { useGoBack } from '@/hooks/use-go-back';
 import { useAuth } from '@/hooks/use-auth';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -62,6 +63,8 @@ const SUPPORT: LinkRow[] = [
 export function Settings() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  const goBack = useGoBack();
   const { logout } = useAuth();
   const [picker, setPicker] = useState<PreferenceRow | null>(null);
   const [selected, setSelected] = useState<Record<string, string>>({
@@ -91,7 +94,7 @@ export function Settings() {
       {/* Top bar */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={10}
           style={styles.iconButton}
           accessibilityRole="button"

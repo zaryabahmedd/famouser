@@ -9,11 +9,11 @@ import {
     ScrollView,
     StyleSheet,
     Text,
-    TextInput,
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useGoBack } from '@/hooks/use-go-back';
 import { BottomNav } from '@/components/bottom-nav';
 
 const COLORS = {
@@ -89,6 +89,8 @@ const TOPICS: Topic[] = ['Orders', 'Payments', 'Tracking', 'Account', 'Refunds']
 export function HelpSupport() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  const goBack = useGoBack();
   const [open, setOpen] = useState<number | null>(0);
   const [activeTopic, setActiveTopic] = useState<Topic | null>(null);
 
@@ -101,7 +103,7 @@ export function HelpSupport() {
       {/* Top bar */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={10}
           style={styles.iconButton}
           accessibilityRole="button"
@@ -117,14 +119,6 @@ export function HelpSupport() {
         showsVerticalScrollIndicator={false}>
         {/* Hero */}
         <Text style={styles.heroTitle}>How can we help?</Text>
-        <View style={styles.search}>
-          <MaterialIcons name="search" size={22} color={COLORS.outline} />
-          <TextInput
-            placeholder="Search help articles"
-            placeholderTextColor={COLORS.outline}
-            style={styles.searchInput}
-          />
-        </View>
 
         {/* Contact actions */}
         <View style={styles.actions}>
@@ -247,24 +241,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -0.5,
     color: COLORS.onSurface,
-    marginBottom: 16,
-  },
-  search: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    height: 52,
-    paddingHorizontal: 16,
-    borderRadius: 14,
-    backgroundColor: COLORS.surfaceLowest,
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant,
     marginBottom: 24,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: COLORS.onSurface,
   },
   actions: {
     gap: 12,

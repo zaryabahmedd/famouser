@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useGoBack } from '@/hooks/use-go-back';
 import { useDeliveryStatus } from '@/hooks/use-delivery-status';
 
 
@@ -37,6 +38,8 @@ const STAR_COLOR = '#FFD700';
 export function RiderAssigned() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  const goBack = useGoBack();
   const params = useLocalSearchParams<{ deliveryId?: string; riderId?: string }>();
   const deliveryId = typeof params.deliveryId === 'string' ? params.deliveryId : null;
   const { delivery } = useDeliveryStatus(deliveryId);
@@ -62,7 +65,7 @@ export function RiderAssigned() {
       {/* Top bar */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={10}
           style={styles.iconButton}
           accessibilityRole="button"

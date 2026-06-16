@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useGoBack } from '@/hooks/use-go-back';
 import { BottomNav } from '@/components/bottom-nav';
 import { useDeliveryStatus } from '@/hooks/use-delivery-status';
 
@@ -91,6 +92,8 @@ function PingDot() {
 export function FindingRider() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  const goBack = useGoBack();
   const params = useLocalSearchParams<{ deliveryId?: string }>();
   const deliveryId = typeof params.deliveryId === 'string' ? params.deliveryId : null;
   const { delivery } = useDeliveryStatus(deliveryId);
@@ -123,7 +126,7 @@ export function FindingRider() {
         params: { deliveryId: delivery.id, riderId: delivery.rider_id ?? '' },
       });
     } else if (delivery.status === 'cancelled') {
-      router.back();
+      goBack();
     }
   }, [delivery, router]);
 
@@ -135,7 +138,7 @@ export function FindingRider() {
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <View style={styles.headerLeft}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             hitSlop={10}
             style={styles.iconButton}
             accessibilityRole="button"

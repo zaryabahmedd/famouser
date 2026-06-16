@@ -1,5 +1,4 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { useGoBack } from '@/hooks/use-go-back';
 import { StatusBar } from 'expo-status-bar';
 import {
@@ -21,7 +20,6 @@ const COLORS = {
 
 export function Notifications() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const goBack = useGoBack();
 
   return (
@@ -41,13 +39,6 @@ export function Notifications() {
           </Pressable>
           <Text style={styles.title}>Notifications</Text>
         </View>
-        <Pressable
-          onPress={() => router.push('/notification-settings')}
-          style={styles.iconButton}
-          accessibilityRole="button"
-          accessibilityLabel="Notification settings">
-          <MaterialIcons name="more-vert" size={24} color={COLORS.onSurfaceVariant} />
-        </Pressable>
       </View>
 
       <View style={styles.empty}>
@@ -70,7 +61,6 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 24,
     paddingBottom: 12,
     borderBottomWidth: 1,

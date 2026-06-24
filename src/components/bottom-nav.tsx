@@ -56,7 +56,12 @@ export function BottomNav({ active }: { active: BottomNavTab }) {
               size={24}
               color={isActive ? C.onPrimaryContainer : C.secondary}
             />
-            <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>{tab.label}</Text>
+            <Text
+              allowFontScaling={false}
+              numberOfLines={1}
+              style={[styles.navLabel, isActive && styles.navLabelActive]}>
+              {tab.label}
+            </Text>
           </Pressable>
         );
       })}

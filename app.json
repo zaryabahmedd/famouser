@@ -8,7 +8,11 @@
     "scheme": "famo",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.famo.user",
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      },
       "config": {
         "googleMapsApiKey": "AIzaSyArKLk-HgW6rzHvL30UG70sux3FjepcSSI"
       }

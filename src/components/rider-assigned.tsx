@@ -119,7 +119,7 @@ export function RiderAssigned() {
         {/* Communication actions */}
         <View style={styles.actions}>
           <Pressable
-            onPress={() => router.push('/call')}
+            onPress={() => router.push({ pathname: '/call', params: { deliveryId: deliveryId ?? '' } })}
             style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
             accessibilityRole="button"
             accessibilityLabel="Call rider">

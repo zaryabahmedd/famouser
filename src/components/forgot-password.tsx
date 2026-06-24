@@ -3,16 +3,16 @@ import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
     ActivityIndicator,
-    KeyboardAvoidingView,
     Platform,
     Pressable,
-    ScrollView,
     StyleSheet,
     Text,
     TextInput,
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { KeyboardAwareScrollView } from '@/components/keyboard-aware-scroll-view';
 
 const COLORS = {
   surface: '#ffffff',
@@ -68,13 +68,11 @@ export function ForgotPassword({ onBack, onSubmit }: ForgotPasswordProps) {
         <View style={styles.iconBtn} />
       </View>
 
-      <KeyboardAvoidingView
+      <KeyboardAwareScrollView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
             <View style={styles.lockIcon}>
               <MaterialIcons name="lock-reset" size={36} color={COLORS.onPrimaryContainer} />
@@ -120,8 +118,7 @@ export function ForgotPassword({ onBack, onSubmit }: ForgotPasswordProps) {
               <Text style={styles.primaryText}>Send 6-digit code</Text>
             )}
           </Pressable>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

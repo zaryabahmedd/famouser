@@ -6,13 +6,14 @@ import { useState } from 'react';
 import {
     Platform,
     Pressable,
-    ScrollView,
     StyleSheet,
     Text,
     TextInput,
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { KeyboardAwareScrollView } from '@/components/keyboard-aware-scroll-view';
 
 const COLORS = {
   surface: '#ffffff',
@@ -57,7 +58,7 @@ export function AddCard() {
         <View style={styles.iconButton} />
       </View>
 
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 24 }]}
         showsVerticalScrollIndicator={false}>
         {/* Card preview */}
@@ -146,7 +147,7 @@ export function AddCard() {
           <MaterialIcons name="lock" size={16} color={COLORS.secondary} />
           <Text style={styles.secureText}>Your card details are encrypted and stored securely.</Text>
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {/* Save */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>

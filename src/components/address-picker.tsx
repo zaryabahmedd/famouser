@@ -6,13 +6,14 @@ import { useState } from 'react';
 import {
     Platform,
     Pressable,
-    ScrollView,
     StyleSheet,
     Text,
     TextInput,
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { KeyboardAwareScrollView } from '@/components/keyboard-aware-scroll-view';
 
 const COLORS = {
   surface: '#ffffff',
@@ -112,7 +113,7 @@ export function AddressPicker() {
         </View>
       </View>
 
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 24 }]}
         showsVerticalScrollIndicator={false}>
         {/* Map shortcut */}
@@ -164,7 +165,7 @@ export function AddressPicker() {
             </View>
           </Pressable>
         ))}
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {/* Confirm */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>

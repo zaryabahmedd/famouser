@@ -290,27 +290,9 @@ export function decodePolyline(encoded: string | null | undefined): { latitude: 
   return points;
 }
 
-// ---- Fare estimate ----------------------------------------------------------
-
-export const FARE = {
-  perKg: 10, // per kilogram
-};
-
-/**
- * Compute a fare estimate from the route distance and package weight, using
- * the live base/per-km prices from the admin-managed `pricing_settings` table
- * (see `usePricing`). Returns a whole-number price in the app's currency.
- */
-export function estimateFare(
-  distanceMeters: number,
-  weightKg: number,
-  basePrice: number,
-  perKmPrice: number,
-): number {
-  const km = distanceMeters / 1000;
-  const price = basePrice + km * perKmPrice + weightKg * FARE.perKg;
-  return Math.round(price);
-}
+// ---- Distance helper --------------------------------------------------------
+// Order pricing now lives in `use-package-pricing` (per-size base + per-km from
+// the admin-managed `package_pricing` table).
 
 /**
  * Straight-line (haversine) distance in meters between two coordinates.

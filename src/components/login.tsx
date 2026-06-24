@@ -4,10 +4,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
     ActivityIndicator,
-    KeyboardAvoidingView,
     Platform,
     Pressable,
-    ScrollView,
     StyleSheet,
     Text,
     TextInput,
@@ -15,6 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { KeyboardAwareScrollView } from '@/components/keyboard-aware-scroll-view';
 
 const COLORS = {
   background: '#fbf9f9',
@@ -66,16 +65,14 @@ export function Login({ onLogin, onSignUp, onForgotPassword, onBack }: LoginProp
   return (
     <View style={styles.root}>
       <StatusBar style="dark" />
-      <KeyboardAvoidingView
+      <KeyboardAwareScrollView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 },
-          ]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}>
           {onBack ? (
             <Pressable onPress={onBack} style={styles.backBtn} accessibilityRole="button" accessibilityLabel="Back">
               <MaterialIcons name="arrow-back" size={24} color={COLORS.onSurfaceVariant} />
@@ -163,8 +160,7 @@ export function Login({ onLogin, onSignUp, onForgotPassword, onBack }: LoginProp
               <Text style={styles.footerLink}>Sign up</Text>
             </Pressable>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

@@ -65,7 +65,8 @@ const DEFAULT: DraftOrder = {
   dropoff: null,
   category: '',
   categoryDescription: '',
-  size: 'm',
+  // One of the four package sizes (5/10/15/20 kg) — see PACKAGE_SIZE_OPTIONS.
+  size: '10',
   weight: 5.5,
   specialInstructions: '',
   paymentMethod: null,

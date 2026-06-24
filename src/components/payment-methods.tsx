@@ -86,7 +86,7 @@ export function PaymentMethods() {
     setReceipt({ uri: asset.uri, base64: asset.base64, mimeType: asset.mimeType ?? 'image/jpeg' });
   };
 
-  const canProceed = selected === 'cod' || (selected === 'bank' && !!receipt);
+  const canProceed = selected === 'cod' || selected === 'bank';
 
   return (
     <View style={styles.root}>
@@ -154,7 +154,7 @@ export function PaymentMethods() {
             </View>
 
             {/* Receipt upload */}
-            <Text style={styles.sectionTitle}>Upload payment receipt</Text>
+            <Text style={styles.sectionTitle}>Upload payment receipt (Optional)</Text>
             <Pressable
               onPress={handlePickReceipt}
               style={({ pressed }) => [styles.uploadBox, pressed && styles.uploadBoxPressed]}
@@ -196,7 +196,7 @@ export function PaymentMethods() {
           ]}
           accessibilityRole="button">
           <Text style={styles.proceedText}>
-            {selected === 'bank' && !receipt ? 'Upload receipt to proceed' : 'Proceed'}
+            Proceed
           </Text>
         </Pressable>
       </View>

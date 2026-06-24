@@ -144,7 +144,7 @@ export function LiveTracking() {
           </View>
           <View style={styles.commActions}>
             <Pressable
-              onPress={() => router.push('/call')}
+              onPress={() => router.push({ pathname: '/call', params: { deliveryId: deliveryId ?? '' } })}
               style={({ pressed }) => [styles.commBtn, pressed && styles.pressed]}
               accessibilityRole="button"
               accessibilityLabel="Call rider">

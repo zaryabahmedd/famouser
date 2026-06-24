@@ -7,7 +7,6 @@ import {
     ActivityIndicator,
     Platform,
     Pressable,
-    ScrollView,
     StyleSheet,
     Text,
     TextInput,
@@ -15,9 +14,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { KeyboardAwareScrollView } from '@/components/keyboard-aware-scroll-view';
 import { useGoBack } from '@/hooks/use-go-back';
 import { usePlaceSearch } from '@/hooks/use-place-search';
-import { usePricing } from '@/hooks/use-pricing';
+import { computePackagePrice, usePackagePricing } from '@/hooks/use-package-pricing';
 import { getRoute, haversineMeters, type PlaceLocation, type PlacePrediction } from '@/lib/geo';
 
 const COLORS = {
@@ -36,17 +36,18 @@ const COLORS = {
 };
 
 type Size = {
-  key: string;
+  // The package size in kg (5/10/15/20) — matches `package_pricing.size`.
+  size: number;
   icon: keyof typeof MaterialIcons.glyphMap;
   label: string;
   desc: string;
 };
 
 const SIZES: Size[] = [
-  { key: 'S', icon: 'inbox',       label: 'Small',       desc: 'Envelope / bag' },
-  { key: 'M', icon: 'inventory',   label: 'Medium',      desc: 'Shoebox size'   },
-  { key: 'L', icon: 'inventory-2', label: 'Large',       desc: 'Moving box'     },
-  { key: 'XL', icon: 'widgets',   label: 'Extra Large', desc: 'Bulk / bulky'   },
+  { size: 5,  icon: 'inbox',       label: 'Small',       desc: 'Envelope / bag' },
+  { size: 10, icon: 'inventory',   label: 'Medium',      desc: 'Shoebox size'   },
+  { size: 15, icon: 'inventory-2', label: 'Large',       desc: 'Moving box'     },
+  { size: 20, icon: 'widgets',     label: 'Extra Large', desc: 'Bulk / bulky'   },
 ];
 
 function formatPrice(value: number): string {
@@ -58,8 +59,8 @@ export function InstantQuote() {
   const router = useRouter();
 
   const goBack = useGoBack();
-  const [size, setSize] = useState('M');
-  const { perKmPrice } = usePricing();
+  const [size, setSize] = useState(10);
+  const { pricing } = usePackagePricing();
 
   // Real Google Places autocomplete for the two location fields.
   const pickupSearch = usePlaceSearch();
@@ -121,8 +122,14 @@ export function InstantQuote() {
   };
 
   const km = distanceMeters != null ? distanceMeters / 1000 : null;
-  // Estimated total billed at the live per-kilometre rate from pricing_settings.
-  const total = km != null ? Math.round(km * perKmPrice) : null;
+  // Estimated total for the selected package size, using the live per-size
+  // pricing from `package_pricing` (base + per_km × km). null when the size
+  // hasn't been priced yet.
+  const sizePrice = pricing ? pricing[size] : undefined;
+  const total =
+    distanceMeters != null && sizePrice != null
+      ? computePackagePrice(distanceMeters, sizePrice)
+      : null;
 
   return (
     <View style={styles.root}>
@@ -149,7 +156,7 @@ export function InstantQuote() {
         />
       </View>
 
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled">
@@ -227,11 +234,11 @@ export function InstantQuote() {
         <Text style={styles.sectionTitle}>PACKAGE SIZE</Text>
         <View style={styles.sizeGrid}>
           {SIZES.map((s) => {
-            const isSelected = size === s.key;
+            const isSelected = size === s.size;
             return (
               <Pressable
-                key={s.key}
-                onPress={() => setSize(s.key)}
+                key={s.size}
+                onPress={() => setSize(s.size)}
                 style={({ pressed }) => [
                   styles.sizeCard,
                   isSelected && styles.sizeCardSelected,
@@ -309,7 +316,7 @@ export function InstantQuote() {
           <Text style={styles.ctaText}>Get estimated price</Text>
           <MaterialIcons name="calculate" size={24} color={COLORS.onPrimaryContainer} />
         </Pressable>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

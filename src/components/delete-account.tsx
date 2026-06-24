@@ -7,16 +7,16 @@ import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
     ActivityIndicator,
-    KeyboardAvoidingView,
     Platform,
     Pressable,
-    ScrollView,
     StyleSheet,
     Text,
     TextInput,
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { KeyboardAwareScrollView } from '@/components/keyboard-aware-scroll-view';
 
 const COLORS = {
   surface: '#ffffff',
@@ -93,13 +93,11 @@ export function DeleteAccount() {
         <View style={styles.iconButton} />
       </View>
 
-      <KeyboardAvoidingView
+      <KeyboardAwareScrollView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}>
           {/* Warning */}
           <View style={styles.warning}>
             <MaterialIcons name="warning-amber" size={24} color={COLORS.error} />
@@ -187,8 +185,7 @@ export function DeleteAccount() {
             accessibilityRole="button">
             <Text style={styles.cancelText}>Cancel</Text>
           </Pressable>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

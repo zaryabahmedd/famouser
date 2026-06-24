@@ -17,9 +17,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGoBack } from '@/hooks/use-go-back';
 import { useCreateDelivery } from '@/hooks/use-create-delivery';
 import { useDraftOrder } from '@/hooks/use-draft-order';
-import { usePricing } from '@/hooks/use-pricing';
+import {
+  computePackagePrice,
+  PACKAGE_SIZE_OPTIONS,
+  usePackagePricing,
+} from '@/hooks/use-package-pricing';
 import { base64ToBytes } from '@/lib/base64';
-import { decodePolyline, estimateFare, FARE, getRoute, haversineMeters } from '@/lib/geo';
+import { decodePolyline, getRoute, haversineMeters } from '@/lib/geo';
 import { supabase } from '@/lib/supabase';
 
 import { RouteMap } from './route-map';
@@ -57,7 +61,7 @@ export function QuoteSummary() {
 
   const goBack = useGoBack();
   const { createDelivery, submitting, error } = useCreateDelivery();
-  const { basePrice, perKmPrice } = usePricing();
+  const { pricing, loading: pricingLoading } = usePackagePricing();
   const {
     pickup,
     dropoff,
@@ -122,21 +126,31 @@ export function QuoteSummary() {
   }, [pickup, dropoff]);
 
   const km = distanceMeters != null ? distanceMeters / 1000 : null;
+
+  // The live price for the chosen package size (5/10/15/20). Undefined when the
+  // table hasn't loaded yet, the table is empty, or this size hasn't been priced.
+  const sizePrice = pricing ? pricing[Number(size)] : undefined;
+  // Pricing is unavailable once loading has settled but we still have no row for
+  // this size — block checkout rather than charge ₦0.
+  const pricingUnavailable = !pricingLoading && sizePrice == null;
+
   const price =
-    distanceMeters != null ? estimateFare(distanceMeters, weight, basePrice, perKmPrice) : null;
+    distanceMeters != null && sizePrice != null
+      ? computePackagePrice(distanceMeters, sizePrice)
+      : null;
 
   const fareRows = useMemo<FareRow[]>(() => {
-    if (km == null) return [];
+    if (km == null || sizePrice == null) return [];
     return [
-      { label: 'Base fare', value: `₦${basePrice}` },
+      { label: 'Base fare', value: `₦${sizePrice.basePrice}` },
       {
-        label: `Distance (${km.toFixed(1)} km × ${perKmPrice})`,
-        value: `₦${Math.round(km * perKmPrice)}`,
+        label: `Distance (${km.toFixed(1)} km × ${sizePrice.perKmPrice})`,
+        value: `₦${Math.round(km * sizePrice.perKmPrice)}`,
       },
-      { label: `Weight (${weight} kg × ${FARE.perKg})`, value: `₦${Math.round(weight * FARE.perKg)}` },
     ];
-  }, [km, weight, basePrice, perKmPrice]);
+  }, [km, sizePrice]);
 
+  const sizeLabel = PACKAGE_SIZE_OPTIONS.find((o) => String(o.size) === size)?.label ?? size;
   const priceLabel = price != null ? `₦${price}` : '—';
 
   // Human-readable label for the package category chip.
@@ -291,7 +305,7 @@ export function QuoteSummary() {
             <Text style={styles.chipText}>{packageLabel}</Text>
           </View>
           <View style={styles.chip}>
-            <Text style={styles.chipText}>{size.toUpperCase()} • {weight}kg</Text>
+            <Text style={styles.chipText}>{sizeLabel} • {weight}kg</Text>
           </View>
           <View style={styles.chip}>
             <Text style={styles.chipText}>{km != null ? `${km.toFixed(1)} km` : '—'}</Text>
@@ -308,14 +322,25 @@ export function QuoteSummary() {
               both from the address search.
             </Text>
           </View>
-        ) : calculating ? (
+        ) : calculating || pricingLoading ? (
           <View style={styles.fareCard}>
             <View style={styles.fareAccent} />
             <Text style={styles.fareHeading}>FARE BREAKDOWN</Text>
             <View style={styles.fareCalculating}>
               <ActivityIndicator size="small" color={COLORS.primary} />
-              <Text style={styles.fareMissing}>Calculating distance…</Text>
+              <Text style={styles.fareMissing}>
+                {calculating ? 'Calculating distance…' : 'Loading pricing…'}
+              </Text>
             </View>
+          </View>
+        ) : pricingUnavailable ? (
+          <View style={styles.fareCard}>
+            <View style={styles.fareAccent} />
+            <Text style={styles.fareHeading}>FARE BREAKDOWN</Text>
+            <Text style={styles.fareMissing}>
+              Pricing is unavailable for the selected package size right now. Please try again in a
+              moment or pick a different size.
+            </Text>
           </View>
         ) : (
           <View style={styles.fareCard}>
@@ -363,6 +388,10 @@ export function QuoteSummary() {
             Pickup and drop-off addresses are required. Go back and pick both from the address
             search.
           </Text>
+        ) : pricingUnavailable ? (
+          <Text style={styles.gateHint}>
+            Pricing unavailable — we couldn’t load the price for this package size.
+          </Text>
         ) : !paymentMethod ? (
           <Text style={styles.gateHint}>Select a payment method to continue</Text>
         ) : null}
@@ -382,7 +411,7 @@ export function QuoteSummary() {
                 : 'Creating request…'
               : isScheduled
                 ? 'Continue'
-                : `Confirm & Pay · ${priceLabel}`}
+                : `Confirm · ${priceLabel}`}
           </Text>
         </Pressable>
       </ScrollView>

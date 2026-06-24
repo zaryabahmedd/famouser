@@ -6,7 +6,6 @@ import { useState } from 'react';
 import {
     Platform,
     Pressable,
-    ScrollView,
     StyleSheet,
     Text,
     TextInput,
@@ -14,9 +13,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { KeyboardAwareScrollView } from '@/components/keyboard-aware-scroll-view';
 import { useGoBack } from '@/hooks/use-go-back';
 import { BottomNav } from '@/components/bottom-nav';
 import { useDraftOrder } from '@/hooks/use-draft-order';
+import { PACKAGE_SIZE_OPTIONS } from '@/hooks/use-package-pricing';
 
 const COLORS = {
   surface: '#ffffff',
@@ -33,18 +34,10 @@ const COLORS = {
   onPrimaryContainer: '#726300',
 };
 
-type Size = {
-  key: string;
-  label: string;
-  limit: string;
-};
-
-const SIZES: Size[] = [
-  { key: 's', label: 'S', limit: '≤ 2kg' },
-  { key: 'm', label: 'M', limit: '≤ 8kg' },
-  { key: 'l', label: 'L', limit: '≤ 20kg' },
-  { key: 'xl', label: 'XL', limit: '≤ 50kg' },
-];
+// Package sizes (5/10/15/20 kg) come from the shared pricing module so the
+// selector emits exactly the values keyed in `package_pricing` and written to
+// `deliveries.package_size`.
+const SIZES = PACKAGE_SIZE_OPTIONS;
 
 export function SizeWeight() {
   const insets = useSafeAreaInsets();
@@ -84,7 +77,7 @@ export function SizeWeight() {
         </Pressable>
       </View>
 
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}>
         {/* Progress */}
@@ -104,11 +97,12 @@ export function SizeWeight() {
         {/* Size selector */}
         <View style={styles.sizeGrid}>
           {SIZES.map((item) => {
-            const isSelected = size === item.key;
+            const value = String(item.size);
+            const isSelected = size === value;
             return (
               <Pressable
-                key={item.key}
-                onPress={() => setSize(item.key)}
+                key={value}
+                onPress={() => setSize(value)}
                 style={[styles.sizeChip, isSelected && styles.sizeChipSelected]}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isSelected }}>
@@ -125,7 +119,7 @@ export function SizeWeight() {
         <View style={styles.vehicle}>
           <MaterialIcons name="electric-bike" size={24} color={COLORS.primary} />
           <Text style={styles.vehicleText}>
-            Suggested bike: <Text style={styles.vehicleBold}>Electric bike</Text>
+            <Text style={styles.vehicleBold}>Electric Bike</Text>
           </Text>
         </View>
 
@@ -151,7 +145,7 @@ export function SizeWeight() {
           accessibilityRole="button">
           <Text style={styles.ctaText}>CONTINUE</Text>
         </Pressable>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {/* Bottom navigation */}
       <BottomNav active="orders" />

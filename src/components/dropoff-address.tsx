@@ -232,7 +232,7 @@ export function DropoffAddress() {
         />
 
         {/* City */}
-        <Text style={styles.sectionTitle}>Enter City (Drop-Off Location)</Text>
+        <Text style={styles.sectionTitle}>Enter Location (Drop-Off Location)</Text>
         <View style={styles.field} onLayout={registerField('city')}>
           <MaterialIcons name="location-city" size={20} color={COLORS.dropoff} />
           <TextInput
@@ -243,7 +243,18 @@ export function DropoffAddress() {
             placeholderTextColor={COLORS.outline}
             style={styles.input}
           />
-          {citySearch.loading ? <ActivityIndicator size="small" color={COLORS.primary} /> : null}
+          {citySearch.loading ? (
+            <ActivityIndicator size="small" color={COLORS.primary} />
+          ) : citySearch.query.length > 0 ? (
+            <Pressable
+              onPress={() => citySearch.onChangeText('')}
+              hitSlop={8}
+              style={({ pressed }) => [styles.clearBtn, pressed && styles.clearBtnPressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Clear address">
+              <MaterialIcons name="close" size={16} color={COLORS.onSurfaceVariant} />
+            </Pressable>
+          ) : null}
         </View>
         {citySearch.unavailable ? (
           <Text style={styles.hint}>City search is temporarily unavailable.</Text>
@@ -509,6 +520,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.onSurfaceVariant,
     marginTop: 2,
+  },
+  clearBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.surfaceContainerHigh,
+  },
+  clearBtnPressed: {
+    opacity: 0.6,
   },
   input: {
     flex: 1,

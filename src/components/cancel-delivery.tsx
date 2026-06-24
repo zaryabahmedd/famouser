@@ -7,7 +7,6 @@ import {
     Alert,
     Platform,
     Pressable,
-    ScrollView,
     StyleSheet,
     Text,
     TextInput,
@@ -15,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { KeyboardAwareScrollView } from '@/components/keyboard-aware-scroll-view';
 import { useGoBack } from '@/hooks/use-go-back';
 import { supabase } from '@/lib/supabase';
 
@@ -109,7 +109,7 @@ export function CancelDelivery() {
         <View style={styles.iconButton} />
       </View>
 
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 24 }]}
         showsVerticalScrollIndicator={false}>
         <View style={styles.warn}>
@@ -153,7 +153,7 @@ export function CancelDelivery() {
             style={styles.noteInput}
           />
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {/* Footer */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>

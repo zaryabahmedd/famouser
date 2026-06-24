@@ -1,6 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useGoBack } from '@/hooks/use-go-back';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
@@ -37,6 +37,8 @@ export function Call() {
   const router = useRouter();
 
   const goBack = useGoBack();
+  const params = useLocalSearchParams<{ deliveryId?: string }>();
+  const deliveryId = typeof params.deliveryId === 'string' ? params.deliveryId : null;
   const [seconds, setSeconds] = useState(0);
   const [muted, setMuted] = useState(false);
   const [speaker, setSpeaker] = useState(false);
@@ -86,7 +88,7 @@ export function Call() {
             <Text style={styles.controlLabel}>Speaker</Text>
           </Pressable>
           <Pressable
-            onPress={() => router.replace('/chat')}
+            onPress={() => router.replace({ pathname: '/chat', params: { deliveryId: deliveryId ?? '' } })}
             style={styles.control}
             accessibilityRole="button"
             accessibilityLabel="Message">

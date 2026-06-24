@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomNav } from '@/components/bottom-nav';
 import { Sidebar } from '@/components/sidebar';
+import { useExitConfirmation } from '@/hooks/use-exit-confirmation';
 import { useProfile } from '@/hooks/use-profile';
 import type { Delivery } from '@/lib/delivery-types';
 import { supabase } from '@/lib/supabase';
@@ -118,6 +119,10 @@ export function Home() {
 
   const avatarUri = profile?.avatar_url ?? AVATAR_FALLBACK;
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
+
+  // On the home screen, the Android back button asks to exit instead of closing
+  // the app outright. Only active while home is focused (see the hook).
+  useExitConfirmation();
 
   // Refetch every time the home screen regains focus (not just on first mount)
   // so a delivery that finished while the user was elsewhere stops showing as an

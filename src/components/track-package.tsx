@@ -7,7 +7,6 @@ import {
     Alert,
     Platform,
     Pressable,
-    ScrollView,
     StyleSheet,
     Text,
     TextInput,
@@ -15,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { KeyboardAwareScrollView } from '@/components/keyboard-aware-scroll-view';
 import { useGoBack } from '@/hooks/use-go-back';
 import type { Delivery } from '@/lib/delivery-types';
 import { supabase } from '@/lib/supabase';
@@ -165,7 +165,7 @@ export function TrackPackage() {
         </Pressable>
       </View>
 
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}>
         {/* Search */}
@@ -256,7 +256,7 @@ export function TrackPackage() {
             })}
           </View>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

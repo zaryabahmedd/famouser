@@ -117,7 +117,7 @@ export function Chat() {
           </View>
         </View>
         <Pressable
-          onPress={() => router.push('/call')}
+          onPress={() => router.push({ pathname: '/call', params: { deliveryId: deliveryId ?? '' } })}
           hitSlop={10}
           style={styles.iconButton}
           accessibilityRole="button"

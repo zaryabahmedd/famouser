@@ -6,7 +6,6 @@ import { useState } from 'react';
 import {
     Platform,
     Pressable,
-    ScrollView,
     StyleSheet,
     Text,
     TextInput,
@@ -14,6 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { KeyboardAwareScrollView } from '@/components/keyboard-aware-scroll-view';
 import { useGoBack } from '@/hooks/use-go-back';
 import { BottomNav } from '@/components/bottom-nav';
 import { useDraftOrder } from '@/hooks/use-draft-order';
@@ -95,7 +95,7 @@ export function Schedule() {
         </View>
       </View>
 
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}>
         {/* Heading */}
@@ -178,7 +178,7 @@ export function Schedule() {
           accessibilityRole="button">
           <Text style={styles.nextText}>Next</Text>
         </Pressable>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {/* Bottom navigation */}
       <BottomNav active="orders" />

@@ -1,3 +1,4 @@
+import { Avatar } from '@/components/avatar';
 import { useAuth } from '@/hooks/use-auth';
 import { useProfile } from '@/hooks/use-profile';
 import { supabase } from '@/lib/supabase';
@@ -18,8 +19,6 @@ import {
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-const AVATAR_FALLBACK = 'https://randomuser.me/api/portraits/lego/1.jpg';
 
 const COLORS = {
   surface: '#ffffff',
@@ -76,7 +75,6 @@ export function Sidebar({ visible, onClose }: SidebarProps) {
   const { profile } = useProfile();
   const { width } = useWindowDimensions();
 
-  const avatarUri = profile?.avatar_url ?? AVATAR_FALLBACK;
   const displayName = profile?.full_name ?? 'Customer';
   const drawerWidth = Math.min(320, width * 0.85);
 
@@ -173,7 +171,7 @@ export function Sidebar({ visible, onClose }: SidebarProps) {
             {/* Profile */}
             <View style={styles.profile}>
               <View style={styles.avatarWrap}>
-                <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" />
+                <Avatar uri={profile?.avatar_url} size={64} style={styles.avatar} />
                 <View style={styles.onlineDot} />
               </View>
               <View style={styles.profileInfo}>

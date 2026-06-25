@@ -173,6 +173,20 @@ export function InstantQuote() {
               style={styles.inputValue}
             />
             {pickupSearch.loading && <ActivityIndicator size="small" color={COLORS.primary} />}
+            {pickupSearch.query.length > 0 && !pickupSearch.loading && (
+              <Pressable
+                onPress={() => {
+                  pickupSearch.setQuery('');
+                  pickupSearch.clear();
+                  setPickupLoc(null);
+                  setShowEstimate(false);
+                }}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Clear pickup">
+                <MaterialIcons name="close" size={20} color={COLORS.outline} />
+              </Pressable>
+            )}
           </View>
           {pickupSearch.predictions.length > 0 && (
             <View style={styles.suggestions}>
@@ -208,6 +222,20 @@ export function InstantQuote() {
               style={styles.inputValue}
             />
             {dropoffSearch.loading && <ActivityIndicator size="small" color={COLORS.primary} />}
+            {dropoffSearch.query.length > 0 && !dropoffSearch.loading && (
+              <Pressable
+                onPress={() => {
+                  dropoffSearch.setQuery('');
+                  dropoffSearch.clear();
+                  setDropoffLoc(null);
+                  setShowEstimate(false);
+                }}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Clear drop-off">
+                <MaterialIcons name="close" size={20} color={COLORS.outline} />
+              </Pressable>
+            )}
           </View>
           {dropoffSearch.predictions.length > 0 && (
             <View style={styles.suggestions}>

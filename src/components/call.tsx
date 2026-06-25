@@ -1,7 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useGoBack } from '@/hooks/use-go-back';
+import { useDeliveryRider } from '@/hooks/use-delivery-rider';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const AVATAR_URI = 'https://randomuser.me/api/portraits/men/75.jpg';
+import { Avatar } from './avatar';
 
 const COLORS = {
   bg: '#1b1b1e',
@@ -39,6 +39,7 @@ export function Call() {
   const goBack = useGoBack();
   const params = useLocalSearchParams<{ deliveryId?: string }>();
   const deliveryId = typeof params.deliveryId === 'string' ? params.deliveryId : null;
+  const { rider } = useDeliveryRider(deliveryId);
   const [seconds, setSeconds] = useState(0);
   const [muted, setMuted] = useState(false);
   const [speaker, setSpeaker] = useState(false);
@@ -58,9 +59,9 @@ export function Call() {
       {/* Caller */}
       <View style={styles.callerBlock}>
         <View style={styles.avatarRing}>
-          <Image source={{ uri: AVATAR_URI }} style={styles.avatar} contentFit="cover" />
+          <Avatar uri={rider?.avatar_url} size={144} style={styles.avatar} />
         </View>
-        <Text style={styles.name}>Rashid Ahmed</Text>
+        <Text style={styles.name}>{rider?.full_name ?? 'Your rider'}</Text>
         <Text style={styles.role}>Your rider</Text>
         <View style={styles.statusPill}>
           <View style={styles.statusDot} />

@@ -14,15 +14,15 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Avatar } from '@/components/avatar';
 import { BottomNav } from '@/components/bottom-nav';
 import { Sidebar } from '@/components/sidebar';
+import type { DeliveryRider } from '@/hooks/use-delivery-rider';
 import { useExitConfirmation } from '@/hooks/use-exit-confirmation';
 import { useProfile } from '@/hooks/use-profile';
 import type { Delivery } from '@/lib/delivery-types';
 import { supabase } from '@/lib/supabase';
 
-const AVATAR_FALLBACK = 'https://randomuser.me/api/portraits/lego/1.jpg';
-const RIDER_AVATAR_URI = 'https://randomuser.me/api/portraits/men/75.jpg';
 const BANNER_URI =
   'https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?auto=format&fit=crop&w=900&q=70';
 
@@ -48,6 +48,7 @@ function statusLabel(status: string): string {
 type ActiveDelivery = Delivery & {
   riderName?: string | null;
   riderVehicle?: string | null;
+  riderAvatar?: string | null;
 };
 
 const COLORS = {
@@ -117,7 +118,6 @@ export function Home() {
   const [deliveryCards, setDeliveryCards] = useState<ActiveDelivery[]>([]);
   const [showingActive, setShowingActive] = useState(true);
 
-  const avatarUri = profile?.avatar_url ?? AVATAR_FALLBACK;
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
 
   // On the home screen, the Android back button asks to exit instead of closing
@@ -166,12 +166,18 @@ export function Home() {
       const withRiders = await Promise.all(
         list.map(async (d): Promise<ActiveDelivery> => {
           if (!d.rider_id) return { ...d };
-          const { data: riderData } = await supabase
-            .from('riders')
-            .select('full_name, vehicle_type')
-            .eq('id', d.rider_id)
-            .single();
-          return { ...d, riderName: riderData?.full_name, riderVehicle: riderData?.vehicle_type };
+          // riders has RLS with no SELECT policy, so read the assigned rider's
+          // public profile through the owner-scoped RPC.
+          const { data } = await supabase
+            .rpc('get_delivery_rider', { p_delivery_id: d.id })
+            .maybeSingle();
+          const riderData = data as DeliveryRider | null;
+          return {
+            ...d,
+            riderName: riderData?.full_name,
+            riderVehicle: riderData?.vehicle_type,
+            riderAvatar: riderData?.avatar_url,
+          };
         }),
       );
       if (active) {
@@ -207,7 +213,7 @@ export function Home() {
             style={styles.avatarRing}
             accessibilityRole="button"
             accessibilityLabel="Open menu">
-            <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" />
+            <Avatar uri={profile?.avatar_url} size={40} />
           </Pressable>
           <View>
             <Text style={styles.greeting}>Hello, {firstName}</Text>
@@ -278,11 +284,7 @@ export function Home() {
                   <View style={styles.deliveryRow}>
                     <View style={styles.deliveryLeft}>
                       <View style={styles.courierRing}>
-                        <Image
-                          source={{ uri: RIDER_AVATAR_URI }}
-                          style={styles.courierAvatar}
-                          contentFit="cover"
-                        />
+                        <Avatar uri={order.riderAvatar} size={44} />
                         <View style={styles.courierBadge}>
                           <Text style={styles.courierBadgeText}>R</Text>
                         </View>

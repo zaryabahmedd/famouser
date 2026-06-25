@@ -15,10 +15,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Avatar } from '@/components/avatar';
 import { BottomNav } from '@/components/bottom-nav';
 import { useProfile } from '@/hooks/use-profile';
-
-const AVATAR_FALLBACK = 'https://randomuser.me/api/portraits/lego/1.jpg';
 
 const COLORS = {
   surface: '#ffffff',
@@ -69,7 +68,6 @@ export function UserProfile() {
   );
 
   const displayName = profile?.full_name?.trim() || 'Your profile';
-  const avatarUri = profile?.avatar_url ?? AVATAR_FALLBACK;
 
   return (
     <View style={styles.root}>
@@ -107,7 +105,7 @@ export function UserProfile() {
         {/* Profile header */}
         <View style={styles.profile}>
           <View style={styles.avatarRing}>
-            <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" />
+            <Avatar uri={profile?.avatar_url} size={120} />
           </View>
           <Text style={styles.name}>{displayName}</Text>
           <View style={styles.metaRow}>

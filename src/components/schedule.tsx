@@ -13,13 +13,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Avatar } from '@/components/avatar';
 import { KeyboardAwareScrollView } from '@/components/keyboard-aware-scroll-view';
 import { useGoBack } from '@/hooks/use-go-back';
 import { BottomNav } from '@/components/bottom-nav';
 import { useDraftOrder } from '@/hooks/use-draft-order';
 import { useProfile } from '@/hooks/use-profile';
-
-const AVATAR_FALLBACK = 'https://randomuser.me/api/portraits/lego/1.jpg';
 
 const COLORS = {
   surface: '#ffffff',
@@ -59,8 +58,6 @@ export function Schedule() {
   const [selected, setSelected] = useState<string>(category || 'fragile');
   const [otherText, setOtherText] = useState(categoryDescription);
 
-  const avatarUri = profile?.avatar_url ?? AVATAR_FALLBACK;
-
   const isOther = selected === 'other';
 
   const handleNext = () => {
@@ -91,7 +88,7 @@ export function Schedule() {
           />
         </View>
         <View style={styles.avatarWrap}>
-          <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" />
+          <Avatar uri={profile?.avatar_url} size={40} />
         </View>
       </View>
 

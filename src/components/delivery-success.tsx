@@ -1,7 +1,9 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useGoBack } from '@/hooks/use-go-back';
+import { useDeliveryRider } from '@/hooks/use-delivery-rider';
+import { useDeliveryStatus } from '@/hooks/use-delivery-status';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
@@ -16,6 +18,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Avatar } from './avatar';
+
 const COLORS = {
   surface: '#ffffff',
   surfaceLowest: '#ffffff',
@@ -28,26 +32,44 @@ const COLORS = {
   onPrimaryContainer: '#726300',
 };
 
-const AVATAR_URI = 'https://randomuser.me/api/portraits/men/75.jpg';
-
 type SummaryRow = {
   label: string;
   value: string;
   total?: boolean;
 };
 
-const SUMMARY: SummaryRow[] = [
-  { label: 'Content', value: 'Electronics' },
-  { label: 'Weight', value: '5.5kg' },
-  { label: 'Total Paid', value: '₦566', total: true },
-];
-
 export function DeliverySuccess() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const goBack = useGoBack();
+  const params = useLocalSearchParams<{ deliveryId?: string }>();
+  const deliveryId =
+    typeof params.deliveryId === 'string' && params.deliveryId ? params.deliveryId : null;
+  const { delivery } = useDeliveryStatus(deliveryId);
+  const { rider } = useDeliveryRider(deliveryId, delivery?.rider_id);
   const [rating, setRating] = useState(0);
+
+  // What the rider is identified by, beneath their name (no fake "Prime" tier).
+  const riderRole =
+    [rider?.vehicle_type, rider?.vehicle_plate].filter(Boolean).join(' · ') || 'Your rider';
+
+  // Real shipment summary from the delivered order (no hardcoded sample rows).
+  const summary = [
+    delivery?.package_category ? { label: 'Content', value: delivery.package_category } : null,
+    delivery?.package_size
+      ? { label: 'Size', value: delivery.package_size }
+      : delivery?.weight != null
+        ? { label: 'Weight', value: `${delivery.weight} kg` }
+        : null,
+    delivery?.price != null
+      ? {
+          label: 'Total Paid',
+          value: `₦${Math.round(delivery.price).toLocaleString('en-NG')}`,
+          total: true,
+        }
+      : null,
+  ].filter(Boolean) as SummaryRow[];
 
   return (
     <View style={styles.root}>
@@ -102,10 +124,10 @@ export function DeliverySuccess() {
         {/* Rider section */}
         <View style={styles.card}>
           <View style={styles.riderRow}>
-            <Image source={{ uri: AVATAR_URI }} style={styles.avatar} contentFit="cover" />
+            <Avatar uri={rider?.avatar_url} size={64} style={styles.avatar} />
             <View>
-              <Text style={styles.riderName}>Rashid Ahmed</Text>
-              <Text style={styles.riderRole}>FAMO Prime Rider</Text>
+              <Text style={styles.riderName}>{rider?.full_name ?? 'Your rider'}</Text>
+              <Text style={styles.riderRole}>{riderRole}</Text>
             </View>
           </View>
           <View style={styles.ratingSection}>
@@ -130,10 +152,11 @@ export function DeliverySuccess() {
         </View>
 
         {/* Shipment summary */}
+        {summary.length > 0 ? (
         <View style={styles.card}>
           <Text style={styles.summaryHeading}>Shipment Summary</Text>
           <View style={styles.summaryRows}>
-            {SUMMARY.map((row) => (
+            {summary.map((row) => (
               <View
                 key={row.label}
                 style={[styles.summaryRow, row.total && styles.summaryRowTotal]}>
@@ -147,6 +170,7 @@ export function DeliverySuccess() {
             ))}
           </View>
         </View>
+        ) : null}
 
         {/* CTA */}
         <Pressable

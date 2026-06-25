@@ -1,5 +1,4 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -16,11 +15,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Avatar } from '@/components/avatar';
 import { KeyboardAwareScrollView } from '@/components/keyboard-aware-scroll-view';
 import { useGoBack } from '@/hooks/use-go-back';
 import { useProfile } from '@/hooks/use-profile';
-
-const AVATAR_FALLBACK = 'https://randomuser.me/api/portraits/lego/1.jpg';
 
 const COLORS = {
   surface: '#ffffff',
@@ -187,11 +185,7 @@ export function EditProfile() {
         {/* Avatar */}
         <View style={styles.avatarSection}>
           <View style={styles.avatarRing}>
-            <Image
-              source={{ uri: avatarUri ?? AVATAR_FALLBACK }}
-              style={styles.avatar}
-              contentFit="cover"
-            />
+            <Avatar uri={avatarUri} size={102} />
             {saving && pendingAvatar && (
               <View style={styles.avatarOverlay}>
                 <ActivityIndicator color={COLORS.onPrimaryFixed} />

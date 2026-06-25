@@ -50,7 +50,9 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow FAMO to access your photos so you can set a profile picture."
+          "photosPermission": "Allow FAMO to access your photos so you can set a profile picture or upload a payment receipt.",
+          "cameraPermission": false,
+          "microphonePermission": false
         }
       ],
       [

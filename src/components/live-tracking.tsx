@@ -1,5 +1,4 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -16,9 +15,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useChatUnread } from '@/hooks/use-chat-unread';
+import { useDeliveryRider } from '@/hooks/use-delivery-rider';
 import { useDeliveryStatus } from '@/hooks/use-delivery-status';
 import { useRiderTracking } from '@/hooks/use-rider-tracking';
 
+import { Avatar } from './avatar';
 import { TrackingMap } from './tracking-map';
 
 const COLORS = {
@@ -33,10 +34,6 @@ const COLORS = {
   border: '#F3F4F6',
   error: '#EF4444',
 };
-
-const AVATAR_URI = 'https://randomuser.me/api/portraits/men/75.jpg';
-
-const TAGS = ['Electronics', 'M · 5.5kg', '₦566'];
 
 function orderCode(id: string): string {
   return `FAMO-${id.replace(/-/g, '').slice(-5).toUpperCase()}`;
@@ -63,7 +60,19 @@ export function LiveTracking() {
     deliveryId,
     paramRiderId ?? delivery?.rider_id ?? null,
   );
+  const { rider } = useDeliveryRider(deliveryId, paramRiderId ?? delivery?.rider_id ?? null);
   const unreadCount = useChatUnread(deliveryId);
+
+  // The rider's vehicle, shown under their name once assigned.
+  const vehicleLabel =
+    [rider?.vehicle_type, rider?.vehicle_plate].filter(Boolean).join(' · ') || null;
+
+  // Real shipment details for the pull-up card (no hardcoded sample tags).
+  const tags = [
+    delivery?.package_category,
+    delivery?.package_size ?? (delivery?.weight != null ? `${delivery.weight} kg` : null),
+    delivery?.price != null ? `₦${Math.round(delivery.price).toLocaleString('en-NG')}` : null,
+  ].filter(Boolean) as string[];
 
   // React to status changes that mean the current rider is no longer assigned.
   useEffect(() => {
@@ -107,7 +116,9 @@ export function LiveTracking() {
           <MaterialIcons name="home" size={24} color={COLORS.famoText} />
         </Pressable>
         <Pressable
-          onPress={() => router.push('/delivery-success')}
+          onPress={() =>
+            router.push({ pathname: '/delivery-success', params: { deliveryId: deliveryId ?? '' } })
+          }
           style={styles.statusPill}
           accessibilityRole="button"
           accessibilityLabel="Delivery status">
@@ -130,16 +141,17 @@ export function LiveTracking() {
         <View style={styles.profileRow}>
           <View style={styles.profileLeft}>
             <View style={styles.avatarWrap}>
-              <Image source={{ uri: AVATAR_URI }} style={styles.avatar} contentFit="cover" />
+              <Avatar uri={rider?.avatar_url} size={64} style={styles.avatar} />
               <View style={styles.onlineDot} />
             </View>
             <View>
-              <Text style={styles.riderName}>Rashid Ahmed</Text>
-              <View style={styles.ratingRow}>
-                <MaterialIcons name="star" size={16} color={COLORS.famoYellow} />
-                <Text style={styles.ratingValue}>4.9</Text>
-                <Text style={styles.ratingTrips}>• 1,284 trips</Text>
-              </View>
+              <Text style={styles.riderName}>{rider?.full_name ?? 'Your rider'}</Text>
+              {vehicleLabel ? (
+                <View style={styles.ratingRow}>
+                  <MaterialIcons name="two-wheeler" size={16} color={COLORS.textMuted} />
+                  <Text style={styles.ratingValue}>{vehicleLabel}</Text>
+                </View>
+              ) : null}
             </View>
           </View>
           <View style={styles.commActions}>
@@ -191,17 +203,16 @@ export function LiveTracking() {
           </View>
         ) : null}
 
-        {/* Shipment tags */}
-        <View style={styles.tags}>
-          {TAGS.map((tag, i) => (
-            <View key={tag} style={styles.tag}>
-              {i === 0 ? (
-                <MaterialIcons name="devices" size={16} color={COLORS.textMuted} />
-              ) : null}
-              <Text style={styles.tagText}>{tag}</Text>
-            </View>
-          ))}
-        </View>
+        {/* Shipment tags — real package details from the delivery */}
+        {tags.length > 0 ? (
+          <View style={styles.tags}>
+            {tags.map((tag) => (
+              <View key={tag} style={styles.tag}>
+                <Text style={styles.tagText}>{tag}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
 
         {/* Footer actions */}
         <View style={styles.footer}>

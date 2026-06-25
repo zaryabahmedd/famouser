@@ -14,8 +14,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useGoBack } from '@/hooks/use-go-back';
+import { useDeliveryRider } from '@/hooks/use-delivery-rider';
 import { useDeliveryStatus } from '@/hooks/use-delivery-status';
 
+import { Avatar } from './avatar';
 
 const COLORS = {
   surface: '#ffffff',
@@ -32,9 +34,6 @@ const COLORS = {
   onPrimaryContainer: '#726300',
 };
 
-const AVATAR_URI = 'https://randomuser.me/api/portraits/men/75.jpg';
-const STAR_COLOR = '#FFD700';
-
 export function RiderAssigned() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -43,6 +42,14 @@ export function RiderAssigned() {
   const params = useLocalSearchParams<{ deliveryId?: string; riderId?: string }>();
   const deliveryId = typeof params.deliveryId === 'string' ? params.deliveryId : null;
   const { delivery } = useDeliveryStatus(deliveryId);
+  const { rider } = useDeliveryRider(deliveryId, delivery?.rider_id);
+
+  // Real vehicle details (no hardcoded "Electric Scooter / FAMO-EV-214").
+  const vehicleTitle =
+    rider?.vehicle_type ||
+    [rider?.vehicle_brand, rider?.vehicle_model].filter(Boolean).join(' ') ||
+    'Vehicle';
+  const vehiclePlate = rider?.vehicle_plate ?? null;
 
   // React to status changes that mean this rider is no longer assigned.
   useEffect(() => {
@@ -87,17 +94,9 @@ export function RiderAssigned() {
         {/* Profile */}
         <View style={styles.profile}>
           <View style={styles.avatarRing}>
-            <Image source={{ uri: AVATAR_URI }} style={styles.avatar} contentFit="cover" />
+            <Avatar uri={rider?.avatar_url} size={128} style={styles.avatar} />
           </View>
-          <Text style={styles.name}>Rashid Ahmed</Text>
-          <View style={styles.ratingRow}>
-            <View style={styles.stars}>
-              {Array.from({ length: 5 }).map((_, i) => (
-                <MaterialIcons key={i} name="star" size={20} color={STAR_COLOR} />
-              ))}
-            </View>
-            <Text style={styles.ratingText}>4.9 · 1,284 trips</Text>
-          </View>
+          <Text style={styles.name}>{rider?.full_name ?? 'Your rider'}</Text>
         </View>
 
         {/* Vehicle info card */}
@@ -107,12 +106,11 @@ export function RiderAssigned() {
               <MaterialIcons name="electric-moped" size={28} color={COLORS.primary} />
             </View>
             <View>
-              <Text style={styles.vehicleTitle}>Electric Scooter</Text>
-              <Text style={styles.vehicleSub}>Plate · FAMO-EV-214</Text>
+              <Text style={styles.vehicleTitle}>{vehicleTitle}</Text>
+              {vehiclePlate ? (
+                <Text style={styles.vehicleSub}>Plate · {vehiclePlate}</Text>
+              ) : null}
             </View>
-          </View>
-          <View style={styles.etaBadge}>
-            <Text style={styles.etaText}>ETA 4 min</Text>
           </View>
         </View>
 

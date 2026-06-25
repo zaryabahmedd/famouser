@@ -1,5 +1,4 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
@@ -18,10 +17,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGoBack } from '@/hooks/use-go-back';
 import { markChatRead } from '@/hooks/use-chat-unread';
 import { useDeliveryChat } from '@/hooks/use-delivery-chat';
+import { useDeliveryRider } from '@/hooks/use-delivery-rider';
 import { useDeliveryStatus } from '@/hooks/use-delivery-status';
 import { supabase } from '@/lib/supabase';
 
-const AVATAR_URI = 'https://randomuser.me/api/portraits/men/75.jpg';
+import { Avatar } from './avatar';
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
@@ -45,8 +45,6 @@ const COLORS = {
 
 const QUICK = ['On my way!', 'Please wait', 'Call me', 'Thank you'];
 
-type RiderInfo = { full_name: string | null };
-
 export function Chat() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -57,8 +55,8 @@ export function Chat() {
 
   const { delivery } = useDeliveryStatus(deliveryId);
   const { messages, sendMessage } = useDeliveryChat(deliveryId);
+  const { rider } = useDeliveryRider(deliveryId, delivery?.rider_id);
   const [userId, setUserId] = useState<string | null>(null);
-  const [rider, setRider] = useState<RiderInfo | null>(null);
   const [draft, setDraft] = useState('');
   const scrollRef = useRef<ScrollView>(null);
 
@@ -70,22 +68,6 @@ export function Chat() {
   useEffect(() => {
     if (deliveryId) markChatRead(deliveryId);
   }, [deliveryId, messages.length]);
-
-  useEffect(() => {
-    if (!delivery?.rider_id) return;
-    let active = true;
-    supabase
-      .from('riders')
-      .select('full_name')
-      .eq('id', delivery.rider_id)
-      .single()
-      .then(({ data }) => {
-        if (active && data) setRider(data as RiderInfo);
-      });
-    return () => {
-      active = false;
-    };
-  }, [delivery?.rider_id]);
 
   const send = (text: string) => {
     if (!text.trim()) return;
@@ -110,10 +92,10 @@ export function Chat() {
           <MaterialIcons name="arrow-back" size={24} color={COLORS.onSurface} />
         </Pressable>
         <View style={styles.headerInfo}>
-          <Image source={{ uri: AVATAR_URI }} style={styles.headerAvatar} contentFit="cover" />
+          <Avatar uri={rider?.avatar_url} size={40} style={styles.headerAvatar} />
           <View>
             <Text style={styles.headerName}>{rider?.full_name ?? 'Your rider'}</Text>
-            <Text style={styles.headerStatus}>Online · Your rider</Text>
+            <Text style={styles.headerStatus}>Your rider</Text>
           </View>
         </View>
         <Pressable

@@ -61,15 +61,13 @@ export function RiderAssigned() {
       return;
     }
     const url = `tel:${phone.replace(/[^+\d]/g, '')}`;
+    // Don't gate on canOpenURL: on Android 11+ it returns false for the `tel`
+    // scheme unless it's declared in the manifest <queries>, even when a dialer
+    // exists. Open directly and surface only a real failure.
     try {
-      const supported = await Linking.canOpenURL(url);
-      if (!supported) {
-        Alert.alert('Cannot place call', 'This device cannot open the dialer.');
-        return;
-      }
       await Linking.openURL(url);
     } catch {
-      Alert.alert('Cannot place call', 'Something went wrong opening the dialer.');
+      Alert.alert('Cannot place call', 'No dialer app is available on this device.');
     }
   };
 

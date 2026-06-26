@@ -4,6 +4,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import {
+    Alert,
+    Linking,
     Platform,
     Pressable,
     ScrollView,
@@ -50,6 +52,26 @@ export function RiderAssigned() {
     [rider?.vehicle_brand, rider?.vehicle_model].filter(Boolean).join(' ') ||
     'Vehicle';
   const vehiclePlate = rider?.vehicle_plate ?? null;
+
+  // Open the device dialer pre-filled with the rider's number.
+  const handleCall = async () => {
+    const phone = rider?.phone_number?.trim();
+    if (!phone) {
+      Alert.alert('Number unavailable', "Your rider's phone number isn't available yet.");
+      return;
+    }
+    const url = `tel:${phone.replace(/[^+\d]/g, '')}`;
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        Alert.alert('Cannot place call', 'This device cannot open the dialer.');
+        return;
+      }
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert('Cannot place call', 'Something went wrong opening the dialer.');
+    }
+  };
 
   // React to status changes that mean this rider is no longer assigned.
   useEffect(() => {
@@ -117,7 +139,7 @@ export function RiderAssigned() {
         {/* Communication actions */}
         <View style={styles.actions}>
           <Pressable
-            onPress={() => router.push({ pathname: '/call', params: { deliveryId: deliveryId ?? '' } })}
+            onPress={handleCall}
             style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
             accessibilityRole="button"
             accessibilityLabel="Call rider">

@@ -144,14 +144,6 @@ export function FindingRider() {
       {/* Top bar */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <View style={styles.headerLeft}>
-          <Pressable
-            onPress={() => goBack()}
-            hitSlop={10}
-            style={styles.iconButton}
-            accessibilityRole="button"
-            accessibilityLabel="Go back">
-            <MaterialIcons name="arrow-back" size={24} color={COLORS.primary} />
-          </Pressable>
           <Image
             source={require('@/assets/images/FAMO-logo-dark.png')}
             style={styles.brandLogo}

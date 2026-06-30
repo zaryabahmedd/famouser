@@ -40,7 +40,7 @@ const COLORS = {
 const TABS = ['Active', 'Scheduled', 'Completed'];
 
 const ACTIVE_STATUSES = ['searching', 'accepted', 'picked_up'];
-const COMPLETED_STATUSES = ['delivered', 'cancelled'];
+const COMPLETED_STATUSES = ['delivered', 'cancelled', 'no_riders'];
 
 function getStatusDisplay(status: string) {
   switch (status) {
@@ -56,6 +56,8 @@ function getStatusDisplay(status: string) {
       return { label: 'Delivered', bg: COLORS.secondaryContainer, color: COLORS.onSecondaryContainer };
     case 'cancelled':
       return { label: 'Cancelled', bg: COLORS.errorContainer, color: COLORS.onErrorContainer };
+    case 'no_riders':
+      return { label: 'No riders found', bg: COLORS.errorContainer, color: COLORS.onErrorContainer };
     default:
       return { label: status, bg: COLORS.secondaryContainer, color: COLORS.onSecondaryContainer };
   }

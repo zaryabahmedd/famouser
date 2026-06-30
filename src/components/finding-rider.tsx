@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef } from 'react';
 import {
+    Alert,
     Animated,
     Easing,
     Platform,
@@ -127,6 +128,12 @@ export function FindingRider() {
       });
     } else if (delivery.status === 'cancelled') {
       goBack();
+    } else if (delivery.status === 'no_riders') {
+      Alert.alert(
+        'No riders available',
+        "We couldn't find a rider for this delivery right now. Please try again in a few minutes.",
+        [{ text: 'OK', onPress: () => router.replace('/orders') }],
+      );
     }
   }, [delivery, router]);
 

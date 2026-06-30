@@ -9,7 +9,10 @@ export type DeliveryStatus =
   | 'cancelled'
   // "Schedule for Later" orders: saved but not yet offered to a rider. The
   // dispatch trigger ignores this status (it only fires on 'searching').
-  | 'scheduled';
+  | 'scheduled'
+  // No rider accepted within the dispatch window (120s). Terminal — the user
+  // must place a new request.
+  | 'no_riders';
 
 export type Delivery = {
   id: string;

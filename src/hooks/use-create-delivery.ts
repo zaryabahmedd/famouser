@@ -12,6 +12,11 @@ type CreateState = {
  * Creates a delivery request for the signed-in user. The database trigger then
  * automatically offers it to the nearest available rider. Returns the created
  * delivery row (with its id) so the caller can start tracking.
+ *
+ * A user may have several requests in flight at once: each new request is
+ * inserted independently and dispatched on its own, so an earlier unaccepted
+ * ('searching') request never blocks or is cancelled by a new one. The full set
+ * of live requests is visible on the Orders screen.
  */
 export function useCreateDelivery() {
   const [state, setState] = useState<CreateState>({ submitting: false, error: null });

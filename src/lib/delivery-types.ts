@@ -39,8 +39,9 @@ export type Delivery = {
   pickup_notes: string | null;
   dropoff_notes: string | null;
   special_instructions: string | null;
-  // How (and proof of) payment, set at order creation and read by the rider app
-  // when it arrives at the drop-off location.
+  // Payment is by bank transfer only, made after the delivery is completed.
+  // New orders are always 'bank_transfer'; 'cod' survives only on legacy rows.
+  // payment_screenshot_url is the receipt the user uploads post-delivery.
   payment_method: 'cod' | 'bank_transfer' | null;
   payment_screenshot_url: string | null;
   // When set, the pickup time the customer booked for a 'scheduled' order.
@@ -70,7 +71,7 @@ export type NewDeliveryInput = {
   pickup_notes?: string | null;
   dropoff_notes?: string | null;
   special_instructions?: string | null;
-  payment_method?: 'cod' | 'bank_transfer' | null;
+  payment_method?: 'bank_transfer' | null;
   payment_screenshot_url?: string | null;
   // Set together for a "Schedule for Later" order: status 'scheduled' keeps it
   // out of rider dispatch until its time.

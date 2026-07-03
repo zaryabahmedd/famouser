@@ -1,5 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useGoBack } from '@/hooks/use-go-back';
 import { useDeliveryRider } from '@/hooks/use-delivery-rider';
@@ -7,6 +8,7 @@ import { useDeliveryStatus } from '@/hooks/use-delivery-status';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
+    ActivityIndicator,
     Alert,
     Platform,
     Pressable,
@@ -18,7 +20,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { base64ToBytes } from '@/lib/base64';
+import { BANK_DETAILS } from '@/lib/payment';
+import { supabase } from '@/lib/supabase';
+
 import { Avatar } from './avatar';
+import { RateDriver } from './rate-driver';
 
 const COLORS = {
   surface: '#ffffff',
@@ -48,7 +55,62 @@ export function DeliverySuccess() {
     typeof params.deliveryId === 'string' && params.deliveryId ? params.deliveryId : null;
   const { delivery } = useDeliveryStatus(deliveryId);
   const { rider } = useDeliveryRider(deliveryId, delivery?.rider_id);
-  const [rating, setRating] = useState(0);
+
+  // Payment happens only after the delivery is completed: the user transfers
+  // the fare to the FAMO bank account and uploads their receipt here. The
+  // uploaded URL is written back to the delivery row so admins can confirm it.
+  const [uploading, setUploading] = useState(false);
+  const [uploadedReceiptUrl, setUploadedReceiptUrl] = useState<string | null>(null);
+  const receiptUrl = uploadedReceiptUrl ?? delivery?.payment_screenshot_url ?? null;
+
+  const handleUploadReceipt = async () => {
+    if (!deliveryId || uploading) return;
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Allow photo library access to upload your receipt.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+      base64: true,
+    });
+    if (result.canceled || !result.assets?.length) return;
+    const asset = result.assets[0];
+    if (!asset.base64) return;
+
+    setUploading(true);
+    try {
+      const { data: auth } = await supabase.auth.getSession();
+      const userId = auth.session?.user?.id;
+      if (!userId) {
+        Alert.alert('Upload failed', 'You must be signed in to upload a receipt.');
+        return;
+      }
+      const mimeType = asset.mimeType ?? 'image/jpeg';
+      const ext = mimeType.includes('png') ? 'png' : 'jpg';
+      const path = `${userId}/receipts/receipt-${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from('payment-receipts')
+        .upload(path, base64ToBytes(asset.base64), { contentType: mimeType, upsert: true });
+      if (uploadError) {
+        Alert.alert('Upload failed', 'Could not upload your receipt. Please try again.');
+        return;
+      }
+      const { data: pub } = supabase.storage.from('payment-receipts').getPublicUrl(path);
+      const { error: updateError } = await supabase
+        .from('deliveries')
+        .update({ payment_screenshot_url: pub.publicUrl })
+        .eq('id', deliveryId);
+      if (updateError) {
+        Alert.alert('Upload failed', 'Could not attach the receipt to your order. Please try again.');
+        return;
+      }
+      setUploadedReceiptUrl(pub.publicUrl);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   // What the rider is identified by, beneath their name (no fake "Prime" tier).
   const riderRole =
@@ -64,7 +126,7 @@ export function DeliverySuccess() {
         : null,
     delivery?.price != null
       ? {
-          label: 'Total Paid',
+          label: receiptUrl ? 'Total Paid' : 'Total to Pay',
           value: `₦${Math.round(delivery.price).toLocaleString('en-NG')}`,
           total: true,
         }
@@ -131,23 +193,7 @@ export function DeliverySuccess() {
             </View>
           </View>
           <View style={styles.ratingSection}>
-            <Text style={styles.ratingLabel}>Rate your rider</Text>
-            <View style={styles.stars}>
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Pressable
-                  key={i}
-                  onPress={() => setRating(i + 1)}
-                  hitSlop={6}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Rate ${i + 1} stars`}>
-                  <MaterialIcons
-                    name={i < rating ? 'star' : 'star-border'}
-                    size={28}
-                    color={COLORS.primaryFixedDim}
-                  />
-                </Pressable>
-              ))}
-            </View>
+            <RateDriver deliveryId={deliveryId} />
           </View>
         </View>
 
@@ -171,6 +217,52 @@ export function DeliverySuccess() {
           </View>
         </View>
         ) : null}
+
+        {/* Payment: bank transfer made after delivery, with receipt upload */}
+        <View style={styles.card}>
+          <Text style={styles.summaryHeading}>Complete Your Payment</Text>
+          {receiptUrl ? (
+            <View style={styles.receiptDone}>
+              <MaterialIcons name="check-circle" size={22} color={COLORS.primary} />
+              <Text style={styles.receiptDoneText}>
+                Receipt uploaded. Our team will confirm your payment shortly.
+              </Text>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.payNote}>
+                Transfer the total amount to the account below, then upload your payment receipt
+                so our team can confirm it.
+              </Text>
+              <View style={styles.bankRows}>
+                {BANK_DETAILS.map((row) => (
+                  <View key={row.label} style={styles.bankRow}>
+                    <Text style={styles.bankLabel}>{row.label}</Text>
+                    <Text style={styles.bankValue}>{row.value}</Text>
+                  </View>
+                ))}
+              </View>
+              <Pressable
+                onPress={handleUploadReceipt}
+                disabled={uploading}
+                style={({ pressed }) => [
+                  styles.uploadBtn,
+                  (pressed || uploading) && styles.uploadBtnPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Upload payment receipt">
+                {uploading ? (
+                  <ActivityIndicator size="small" color={COLORS.onPrimaryContainer} />
+                ) : (
+                  <MaterialIcons name="cloud-upload" size={20} color={COLORS.onPrimaryContainer} />
+                )}
+                <Text style={styles.uploadBtnText}>
+                  {uploading ? 'Uploading…' : 'Upload payment receipt'}
+                </Text>
+              </Pressable>
+            </>
+          )}
+        </View>
 
         {/* CTA */}
         <Pressable
@@ -290,15 +382,6 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.outlineVariant,
     gap: 8,
   },
-  ratingLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.onSurfaceVariant,
-  },
-  stars: {
-    flexDirection: 'row',
-    gap: 8,
-  },
   summaryHeading: {
     fontSize: 14,
     fontWeight: '600',
@@ -341,6 +424,57 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: COLORS.primary,
+  },
+  payNote: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: COLORS.onSurfaceVariant,
+  },
+  bankRows: {
+    gap: 12,
+  },
+  bankRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  bankLabel: {
+    fontSize: 13,
+    color: COLORS.onSurfaceVariant,
+  },
+  bankValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.onSurface,
+  },
+  uploadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 48,
+    borderRadius: 999,
+    backgroundColor: COLORS.primaryContainer,
+  },
+  uploadBtnPressed: {
+    opacity: 0.85,
+  },
+  uploadBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.onPrimaryContainer,
+  },
+  receiptDone: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  receiptDoneText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 19,
+    color: COLORS.onSurfaceVariant,
   },
   cta: {
     marginTop: 4,

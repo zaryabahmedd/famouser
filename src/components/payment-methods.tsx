@@ -1,11 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
 import {
-    Alert,
     Platform,
     Pressable,
     ScrollView,
@@ -16,7 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useGoBack } from '@/hooks/use-go-back';
-import { useDraftOrder, type PaymentMethod, type PaymentReceipt } from '@/hooks/use-draft-order';
+import { BANK_DETAILS } from '@/lib/payment';
 
 const COLORS = {
   surface: '#ffffff',
@@ -33,60 +28,12 @@ const COLORS = {
   onPrimaryContainer: '#726300',
 };
 
-type Method = {
-  key: PaymentMethod;
-  icon: keyof typeof MaterialIcons.glyphMap;
-  title: string;
-  subtitle: string;
-};
-
-const METHODS: Method[] = [
-  {
-    key: 'cod',
-    icon: 'payments',
-    title: 'Cash on delivery',
-    subtitle: 'Pay the rider directly when your package arrives',
-  },
-  {
-    key: 'bank',
-    icon: 'account-balance',
-    title: 'Bank transfer',
-    subtitle: 'Transfer to our account and upload your receipt',
-  },
-];
-
-const BANK_DETAILS = [
-  { label: 'Bank name', value: 'Guaranty Trust Bank (GTBank)' },
-  { label: 'Account name', value: 'Fast Motion Logistics Ltd' },
-  { label: 'Account number', value: '0123456789' },
-];
-
+// Bank transfer is the only payment method (COD has been removed), so this
+// screen is informational: it shows the account to pay into and explains that
+// payment happens only after the delivery is completed.
 export function PaymentMethods() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const goBack = useGoBack();
-  const { paymentMethod, setPaymentMethod, paymentReceipt, setPaymentReceipt } = useDraftOrder();
-  const [selected, setSelected] = useState<PaymentMethod>(paymentMethod ?? 'cod');
-  const [receipt, setReceipt] = useState<PaymentReceipt | null>(paymentReceipt);
-
-  const handlePickReceipt = async () => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert('Permission needed', 'Allow photo library access to upload your receipt.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.7,
-      base64: true,
-    });
-    if (result.canceled || !result.assets?.length) return;
-    const asset = result.assets[0];
-    if (!asset.base64) return;
-    setReceipt({ uri: asset.uri, base64: asset.base64, mimeType: asset.mimeType ?? 'image/jpeg' });
-  };
-
-  const canProceed = selected === 'cod' || selected === 'bank';
 
   return (
     <View style={styles.root}>
@@ -109,95 +56,44 @@ export function PaymentMethods() {
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}>
-        <View style={styles.list}>
-          {METHODS.map((m) => {
-            const isSelected = selected === m.key;
-            return (
-              <Pressable
-                key={m.key}
-                onPress={() => setSelected(m.key)}
-                style={[styles.card, isSelected && styles.cardSelected]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: isSelected }}>
-                <View style={[styles.badge, isSelected && styles.badgeSelected]}>
-                  <MaterialIcons name={m.icon} size={22} color={COLORS.onSurface} />
-                </View>
-                <View style={styles.cardText}>
-                  <Text style={styles.cardTitle}>{m.title}</Text>
-                  <Text style={styles.cardSubtitle}>{m.subtitle}</Text>
-                </View>
-                {isSelected ? (
-                  <View style={styles.check}>
-                    <MaterialIcons name="check" size={16} color={COLORS.onPrimaryContainer} />
-                  </View>
-                ) : null}
-              </Pressable>
-            );
-          })}
+        <View style={[styles.card, styles.cardSelected]}>
+          <View style={[styles.badge, styles.badgeSelected]}>
+            <MaterialIcons name="account-balance" size={22} color={COLORS.onSurface} />
+          </View>
+          <View style={styles.cardText}>
+            <Text style={styles.cardTitle}>Bank transfer</Text>
+            <Text style={styles.cardSubtitle}>
+              Pay after your delivery is completed and upload your receipt
+            </Text>
+          </View>
+          <View style={styles.check}>
+            <MaterialIcons name="check" size={16} color={COLORS.onPrimaryContainer} />
+          </View>
         </View>
 
-        {selected === 'bank' ? (
-          <>
-            {/* Dummy bank details for the user to transfer to */}
-            <Text style={styles.sectionTitle}>Transfer to this account</Text>
-            <View style={styles.bankCard}>
-              {BANK_DETAILS.map((row) => (
-                <View key={row.label} style={styles.bankRow}>
-                  <Text style={styles.bankLabel}>{row.label}</Text>
-                  <Text style={styles.bankValue}>{row.value}</Text>
-                </View>
-              ))}
-              <Text style={styles.bankNote}>
-                Transfer the full order amount to this account, then upload your payment receipt
-                below so our team can confirm it.
-              </Text>
+        <Text style={styles.sectionTitle}>Transfer to this account</Text>
+        <View style={styles.bankCard}>
+          {BANK_DETAILS.map((row) => (
+            <View key={row.label} style={styles.bankRow}>
+              <Text style={styles.bankLabel}>{row.label}</Text>
+              <Text style={styles.bankValue}>{row.value}</Text>
             </View>
-
-            {/* Receipt upload */}
-            <Text style={styles.sectionTitle}>Upload payment receipt (Optional)</Text>
-            <Pressable
-              onPress={handlePickReceipt}
-              style={({ pressed }) => [styles.uploadBox, pressed && styles.uploadBoxPressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Upload payment receipt">
-              {receipt ? (
-                <>
-                  <Image
-                    source={{ uri: receipt.uri }}
-                    style={styles.receiptPreview}
-                    contentFit="cover"
-                  />
-                  <Text style={styles.uploadReplaceText}>Tap to choose a different photo</Text>
-                </>
-              ) : (
-                <>
-                  <MaterialIcons name="cloud-upload" size={32} color={COLORS.outline} />
-                  <Text style={styles.uploadTitle}>Tap to upload receipt</Text>
-                  <Text style={styles.uploadHint}>PNG or JPG screenshot of your transfer</Text>
-                </>
-              )}
-            </Pressable>
-          </>
-        ) : null}
+          ))}
+          <Text style={styles.bankNote}>
+            No payment is needed to place your order. Once your delivery is completed, transfer
+            the full order amount to this account and upload your payment receipt from the
+            delivery screen so our team can confirm it.
+          </Text>
+        </View>
       </ScrollView>
 
-      {/* Proceed */}
+      {/* Done */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
         <Pressable
-          onPress={() => {
-            setPaymentMethod(selected);
-            setPaymentReceipt(selected === 'bank' ? receipt : null);
-            goBack();
-          }}
-          disabled={!canProceed}
-          style={({ pressed }) => [
-            styles.proceedBtn,
-            (pressed || !canProceed) && styles.proceedBtnDisabled,
-          ]}
+          onPress={() => goBack()}
+          style={({ pressed }) => [styles.proceedBtn, pressed && styles.proceedBtnPressed]}
           accessibilityRole="button">
-          <Text style={styles.proceedText}>
-            Proceed
-          </Text>
+          <Text style={styles.proceedText}>Got it</Text>
         </Pressable>
       </View>
     </View>
@@ -238,9 +134,6 @@ const styles = StyleSheet.create({
     maxWidth: 480,
     width: '100%',
     alignSelf: 'center',
-  },
-  list: {
-    gap: 12,
   },
   card: {
     flexDirection: 'row',
@@ -328,41 +221,6 @@ const styles = StyleSheet.create({
     color: COLORS.onSurfaceVariant,
     marginTop: 4,
   },
-  uploadBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    padding: 24,
-    borderRadius: 14,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: COLORS.outlineVariant,
-    backgroundColor: COLORS.surfaceContainerLow,
-    overflow: 'hidden',
-  },
-  uploadBoxPressed: {
-    opacity: 0.85,
-  },
-  uploadTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.onSurface,
-  },
-  uploadHint: {
-    fontSize: 12,
-    color: COLORS.secondary,
-  },
-  receiptPreview: {
-    width: '100%',
-    height: 180,
-    borderRadius: 10,
-  },
-  uploadReplaceText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.primary,
-    marginTop: 8,
-  },
   footer: {
     paddingHorizontal: 20,
     paddingTop: 12,
@@ -377,8 +235,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: COLORS.primaryContainer,
   },
-  proceedBtnDisabled: {
-    opacity: 0.5,
+  proceedBtnPressed: {
+    opacity: 0.85,
   },
   proceedText: {
     fontSize: 15,

@@ -62,9 +62,15 @@ export function DropoffAddress() {
   // option so it only appears after the map has navigated to the address.
   const [addressResolved, setAddressResolved] = useState(!!dropoff);
 
-  // The Continue button is always enabled; handleContinue resolves any missing
-  // location via geocoding/map pin before advancing.
-  const canContinue = true;
+  // Every field is required — address, recipient name, a real phone number,
+  // and drop-off instructions — so incomplete or bogus orders can't be
+  // submitted.
+  const phoneValid = phone.replace(/\D/g, '').length >= 10;
+  const isComplete =
+    citySearch.query.trim().length > 0 &&
+    name.trim().length > 0 &&
+    phoneValid &&
+    notes.trim().length > 0;
   const [resolving, setResolving] = useState(false);
 
   const openMapPicker = () => {
@@ -132,6 +138,16 @@ export function DropoffAddress() {
   }, [citySearch.query]);
 
   const handleContinue = async () => {
+    if (!isComplete) {
+      Alert.alert(
+        'Missing information',
+        phone.trim().length > 0 && !phoneValid
+          ? 'Enter a valid phone number (at least 10 digits).'
+          : 'Please fill in all the fields above before continuing.',
+      );
+      return;
+    }
+
     // Make sure we have a real located drop-off before advancing. Without coords
     // the draft dropoff is null, the fare can't be computed, and Quote Summary's
     // button stays disabled. (The text field alone isn't enough — the auto-geocode
@@ -328,15 +344,15 @@ export function DropoffAddress() {
 
         {/* Continue */}
         <Pressable
-          disabled={!canContinue || resolving}
+          disabled={resolving}
           onPress={handleContinue}
           style={({ pressed }) => [
             styles.next,
-            (!canContinue || resolving) && styles.nextDisabled,
-            pressed && canContinue && !resolving && styles.nextPressed,
+            (!isComplete || resolving) && styles.nextDisabled,
+            pressed && isComplete && !resolving && styles.nextPressed,
           ]}
           accessibilityRole="button">
-          <Text style={[styles.nextText, !canContinue && styles.nextTextDisabled]}>
+          <Text style={[styles.nextText, !isComplete && styles.nextTextDisabled]}>
             {resolving ? 'Locating address…' : 'Confirm addresses'}
           </Text>
         </Pressable>

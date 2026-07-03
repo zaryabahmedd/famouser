@@ -18,6 +18,8 @@ import { useGoBack } from '@/hooks/use-go-back';
 import type { Delivery } from '@/lib/delivery-types';
 import { supabase } from '@/lib/supabase';
 
+import { RateDriver } from './rate-driver';
+
 const COLORS = {
   surface: '#ffffff',
   surfaceLowest: '#ffffff',
@@ -256,14 +258,30 @@ export function OrderDetails() {
           </>
         )}
 
+        {delivery.status === 'delivered' && delivery.rider_id ? (
+          <>
+            <Text style={styles.sectionTitle}>Your review</Text>
+            <View style={styles.card}>
+              <RateDriver deliveryId={delivery.id} />
+            </View>
+          </>
+        ) : null}
+
         {delivery.price != null && (
           <>
             <Text style={styles.sectionTitle}>Payment</Text>
             <View style={styles.card}>
               <View style={styles.fareRow}>
-                <Text style={styles.totalLabel}>Total paid</Text>
+                <Text style={styles.totalLabel}>
+                  {delivery.payment_screenshot_url ? 'Total paid' : 'Total to pay'}
+                </Text>
                 <Text style={styles.totalValue}>₦{Number(delivery.price).toLocaleString()}</Text>
               </View>
+              <Text style={styles.paymentMeta}>
+                {delivery.payment_screenshot_url
+                  ? 'Bank transfer · receipt uploaded'
+                  : 'Bank transfer · pay after delivery'}
+              </Text>
             </View>
           </>
         )}
@@ -508,6 +526,11 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
     color: COLORS.onSurface,
+  },
+  paymentMeta: {
+    fontSize: 13,
+    color: COLORS.onSurfaceVariant,
+    marginTop: 4,
   },
   footer: {
     flexDirection: 'row',

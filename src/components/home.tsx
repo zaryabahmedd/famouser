@@ -95,7 +95,7 @@ const ACTIONS: ActionCard[] = [
   {
     key: 'quote',
     icon: 'request-quote',
-    image: require('@/assets/images/get a quote.png'),
+    image: require('@/assets/images/get-a-quote.png'),
     title: 'Get Quote',
     subtitle: 'Instant pricing',
     href: '/instant-quote',
@@ -103,7 +103,7 @@ const ACTIONS: ActionCard[] = [
   {
     key: 'support',
     icon: 'support-agent',
-    image: require('@/assets/images/support .png'),
+    image: require('@/assets/images/support.png'),
     title: 'Support',
     subtitle: '24/7 help',
     href: '/help-support',
@@ -213,7 +213,7 @@ export function Home() {
             style={styles.avatarRing}
             accessibilityRole="button"
             accessibilityLabel="Open menu">
-            <Avatar uri={profile?.avatar_url} size={40} />
+            <Avatar uri={profile?.avatar_url} size={36} />
           </Pressable>
           <View>
             <Text style={styles.greeting}>Hello, {firstName}</Text>
@@ -284,7 +284,7 @@ export function Home() {
                   <View style={styles.deliveryRow}>
                     <View style={styles.deliveryLeft}>
                       <View style={styles.courierRing}>
-                        <Avatar uri={order.riderAvatar} size={44} />
+                        <Avatar uri={order.riderAvatar} size={40} />
                         <View style={styles.courierBadge}>
                           <Text style={styles.courierBadgeText}>R</Text>
                         </View>
@@ -370,6 +370,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // The ring's content box (width - border - padding) must match the Avatar
+  // size exactly: iOS doesn't clip child views, so an oversized avatar spills
+  // outside the ring instead of being masked like on Android.
   avatarRing: {
     width: 44,
     height: 44,
@@ -378,6 +381,8 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primaryContainer,
     padding: 2,
     backgroundColor: COLORS.surfaceLowest,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatar: {
     flex: 1,
@@ -558,6 +563,8 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primaryContainer,
     padding: 2,
     backgroundColor: COLORS.surfaceLowest,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   courierAvatar: {
     flex: 1,

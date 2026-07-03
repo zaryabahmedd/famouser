@@ -62,9 +62,14 @@ export function PickupAddress() {
   // option so it only appears after the map has navigated to the address.
   const [addressResolved, setAddressResolved] = useState(!!pickup);
 
-  // City, sender name, and sender phone must all be filled before continuing.
+  // Every field is required — address, sender name, a real phone number, and
+  // pickup instructions — so incomplete or bogus orders can't be submitted.
+  const phoneValid = phone.replace(/\D/g, '').length >= 10;
   const isComplete =
-    citySearch.query.trim().length > 0 && name.trim().length > 0 && phone.trim().length > 0;
+    citySearch.query.trim().length > 0 &&
+    name.trim().length > 0 &&
+    phoneValid &&
+    notes.trim().length > 0;
 
   const openMapPicker = () => {
     router.push({
@@ -134,7 +139,12 @@ export function PickupAddress() {
 
   const handleContinue = async () => {
     if (!isComplete) {
-      Alert.alert('Missing information', 'You must fill information above');
+      Alert.alert(
+        'Missing information',
+        phone.trim().length > 0 && !phoneValid
+          ? 'Enter a valid phone number (at least 10 digits).'
+          : 'Please fill in all the fields above before continuing.',
+      );
       return;
     }
 

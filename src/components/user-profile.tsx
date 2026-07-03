@@ -105,7 +105,7 @@ export function UserProfile() {
         {/* Profile header */}
         <View style={styles.profile}>
           <View style={styles.avatarRing}>
-            <Avatar uri={profile?.avatar_url} size={120} />
+            <Avatar uri={profile?.avatar_url} size={112} />
           </View>
           <Text style={styles.name}>{displayName}</Text>
           <View style={styles.metaRow}>
@@ -213,6 +213,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 32,
   },
+  // Content box (width - border - padding) must equal the Avatar size: iOS
+  // doesn't clip child views, so an oversized avatar overflows the ring.
   avatarRing: {
     width: 128,
     height: 128,
@@ -221,6 +223,8 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primaryContainer,
     padding: 4,
     backgroundColor: COLORS.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatar: {
     flex: 1,

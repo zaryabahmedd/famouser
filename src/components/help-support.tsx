@@ -54,7 +54,7 @@ type Faq = {
 const FAQS: Faq[] = [
   {
     q: 'How is the delivery price calculated?',
-    a: 'Pricing is based on distance, package size and weight, and the vehicle type. You always see the full quote before you confirm and pay.',
+    a: 'Pricing is based on distance, package size and weight, and the vehicle type. You always see the full quote before you confirm, and you only pay after the delivery is completed.',
     topic: 'Orders',
   },
   {
@@ -64,7 +64,7 @@ const FAQS: Faq[] = [
   },
   {
     q: 'What payment methods are supported?',
-    a: 'We accept cash on delivery and card payments at checkout.',
+    a: 'Payment is by bank transfer only. You pay after your delivery is completed: transfer the total to the FAMO account and upload your payment receipt from the delivery screen.',
     topic: 'Payments',
   },
   {

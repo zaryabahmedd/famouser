@@ -22,9 +22,7 @@ import {
   PACKAGE_SIZE_OPTIONS,
   usePackagePricing,
 } from '@/hooks/use-package-pricing';
-import { base64ToBytes } from '@/lib/base64';
 import { decodePolyline, getRoute, haversineMeters } from '@/lib/geo';
-import { supabase } from '@/lib/supabase';
 
 import { RouteMap } from './route-map';
 
@@ -70,22 +68,12 @@ export function QuoteSummary() {
     category,
     categoryDescription,
     specialInstructions,
-    paymentMethod,
-    paymentReceipt,
     scheduledAt,
     reset,
   } = useDraftOrder();
 
   // A "Schedule for Later" order was booked on the Pickup Time screen.
   const isScheduled = scheduledAt != null;
-
-  const paymentLabel =
-    paymentMethod === 'bank'
-      ? 'Bank transfer'
-      : paymentMethod === 'cod'
-        ? 'Cash on delivery'
-        : 'Select payment method';
-  const paymentIconName = paymentMethod === 'bank' ? 'account-balance' : 'payments';
 
   const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
   const [routePoints, setRoutePoints] = useState<{ latitude: number; longitude: number }[]>([]);
@@ -166,15 +154,12 @@ export function QuoteSummary() {
     CATEGORY_LABELS[category] ||
     'Package';
 
-  // Local "busy" state covers the whole submit (including the bank-receipt
-  // upload, which happens before the hook's `submitting` flips). The ref guard
-  // rejects repeat taps synchronously so a slow first tap can never create
-  // duplicate delivery requests.
+  // The ref guard rejects repeat taps synchronously so a slow first tap can
+  // never create duplicate delivery requests.
   const [busy, setBusy] = useState(false);
   const submitGuard = useRef(false);
 
-  // Gate the bottom action on a chosen payment method (and a ready price).
-  const canSubmit = !submitting && !busy && price != null && paymentMethod != null && hasRoute;
+  const canSubmit = !submitting && !busy && price != null && hasRoute;
 
   const handleConfirm = async () => {
     // Synchronous re-entrancy guard: blocks the 2nd..Nth tap before any await,
@@ -194,29 +179,6 @@ export function QuoteSummary() {
 
   const submitRequest = async () => {
     if (!pickup || !dropoff || price == null) return;
-
-    // Map the draft's UI-level choice to the DB's payment_method values, and
-    // upload the bank-transfer receipt (if any) to get a public proof-of-payment URL.
-    const paymentMethodForDb = paymentMethod === 'bank' ? 'bank_transfer' : 'cod';
-    let paymentScreenshotUrl: string | null = null;
-    if (paymentMethod === 'bank' && paymentReceipt) {
-      const { data: auth } = await supabase.auth.getSession();
-      const userId = auth.session?.user?.id;
-      if (userId) {
-        const ext = paymentReceipt.mimeType.includes('png') ? 'png' : 'jpg';
-        const path = `${userId}/receipts/receipt-${Date.now()}.${ext}`;
-        const { error: uploadError } = await supabase.storage
-          .from('payment-receipts')
-          .upload(path, base64ToBytes(paymentReceipt.base64), {
-            contentType: paymentReceipt.mimeType,
-            upsert: true,
-          });
-        if (!uploadError) {
-          const { data: pub } = supabase.storage.from('payment-receipts').getPublicUrl(path);
-          paymentScreenshotUrl = pub.publicUrl;
-        }
-      }
-    }
 
     const delivery = await createDelivery({
       pickup_address: pickup.address,
@@ -240,8 +202,10 @@ export function QuoteSummary() {
         [category === 'other' ? categoryDescription : null, specialInstructions]
           .filter(Boolean)
           .join('\n') || null,
-      payment_method: paymentMethodForDb,
-      payment_screenshot_url: paymentScreenshotUrl,
+      // Bank transfer is the only payment method; the customer pays after the
+      // delivery is completed and uploads their receipt then.
+      payment_method: 'bank_transfer',
+      payment_screenshot_url: null,
       // Scheduled orders are saved with status 'scheduled' so the dispatch
       // trigger leaves them alone; immediate ones default to 'searching'.
       status: isScheduled ? 'scheduled' : 'searching',
@@ -372,9 +336,12 @@ export function QuoteSummary() {
           accessibilityRole="button">
           <View style={styles.paymentLeft}>
             <View style={styles.paymentIcon}>
-              <MaterialIcons name={paymentIconName} size={24} color={COLORS.onSurface} />
+              <MaterialIcons name="account-balance" size={24} color={COLORS.onSurface} />
             </View>
-            <Text style={styles.paymentText}>{paymentLabel}</Text>
+            <View>
+              <Text style={styles.paymentText}>Bank transfer</Text>
+              <Text style={styles.paymentSub}>Pay after delivery</Text>
+            </View>
           </View>
           <MaterialIcons name="chevron-right" size={24} color={COLORS.outline} />
         </Pressable>
@@ -392,8 +359,6 @@ export function QuoteSummary() {
           <Text style={styles.gateHint}>
             Pricing unavailable — we couldn’t load the price for this package size.
           </Text>
-        ) : !paymentMethod ? (
-          <Text style={styles.gateHint}>Select a payment method to continue</Text>
         ) : null}
         <Pressable
           onPress={handleConfirm}
@@ -622,6 +587,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: COLORS.onSurface,
+  },
+  paymentSub: {
+    fontSize: 12,
+    color: COLORS.secondary,
+    marginTop: 2,
   },
   confirm: {
     height: 56,

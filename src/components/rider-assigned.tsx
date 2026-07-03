@@ -2,7 +2,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
     Alert,
     Linking,
@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { getRiderReviews, type RiderReviewSummary } from '@/hooks/delivery-review';
 import { useGoBack } from '@/hooks/use-go-back';
 import { useDeliveryRider } from '@/hooks/use-delivery-rider';
 import { useDeliveryStatus } from '@/hooks/use-delivery-status';
@@ -45,6 +46,24 @@ export function RiderAssigned() {
   const deliveryId = typeof params.deliveryId === 'string' ? params.deliveryId : null;
   const { delivery } = useDeliveryStatus(deliveryId);
   const { rider } = useDeliveryRider(deliveryId, delivery?.rider_id);
+
+  // The driver's collective rating, always read from get_rider_reviews (never
+  // computed client-side). Hidden until loaded or when they have no reviews.
+  const [reviewSummary, setReviewSummary] = useState<RiderReviewSummary | null>(null);
+  useEffect(() => {
+    const riderId = delivery?.rider_id;
+    if (!riderId) {
+      setReviewSummary(null);
+      return;
+    }
+    let active = true;
+    getRiderReviews(riderId).then((summary) => {
+      if (active) setReviewSummary(summary);
+    });
+    return () => {
+      active = false;
+    };
+  }, [delivery?.rider_id]);
 
   // Real vehicle details (no hardcoded "Electric Scooter / FAMO-EV-214").
   const vehicleTitle =
@@ -117,6 +136,14 @@ export function RiderAssigned() {
             <Avatar uri={rider?.avatar_url} size={128} style={styles.avatar} />
           </View>
           <Text style={styles.name}>{rider?.full_name ?? 'Your rider'}</Text>
+          {reviewSummary && reviewSummary.count > 0 ? (
+            <View style={styles.ratingRow}>
+              <MaterialIcons name="star" size={16} color="#fbd103" />
+              <Text style={styles.ratingText}>
+                {reviewSummary.average.toFixed(1)} ({reviewSummary.count})
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         {/* Vehicle info card */}

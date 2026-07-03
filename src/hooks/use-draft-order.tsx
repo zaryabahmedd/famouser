@@ -17,17 +17,6 @@ export type DraftEndpoint = {
   notes?: string;
 };
 
-export type PaymentMethod = 'cod' | 'bank';
-
-// A bank-transfer receipt picked on the Payment method screen, kept here (not
-// local component state) so it survives the navigation back to Quote Summary,
-// where it gets uploaded to Supabase Storage on order creation.
-export type PaymentReceipt = {
-  uri: string;
-  base64: string;
-  mimeType: string;
-};
-
 type DraftOrder = {
   pickup: DraftEndpoint | null;
   dropoff: DraftEndpoint | null;
@@ -37,11 +26,6 @@ type DraftOrder = {
   size: string;
   weight: number;
   specialInstructions: string;
-  // Chosen on the "Payment method" screen, reflected back on Quote Summary.
-  paymentMethod: PaymentMethod | null;
-  // Set when the user picks a receipt photo for a bank transfer; cleared when
-  // they switch back to COD.
-  paymentReceipt: PaymentReceipt | null;
   // ISO timestamp the customer booked on the Pickup Time screen when choosing
   // "Schedule for Later". null means "Deliver Now" (immediate dispatch).
   scheduledAt: string | null;
@@ -54,8 +38,6 @@ type DraftOrderContextValue = DraftOrder & {
   updateDropoff: (patch: Partial<DraftEndpoint>) => void;
   setCategory: (category: string, description?: string) => void;
   setPackage: (size: string, weight: number, specialInstructions?: string) => void;
-  setPaymentMethod: (method: PaymentMethod) => void;
-  setPaymentReceipt: (receipt: PaymentReceipt | null) => void;
   setScheduledAt: (iso: string | null) => void;
   reset: () => void;
 };
@@ -69,8 +51,6 @@ const DEFAULT: DraftOrder = {
   size: '10',
   weight: 5.5,
   specialInstructions: '',
-  paymentMethod: null,
-  paymentReceipt: null,
   scheduledAt: null,
 };
 
@@ -107,14 +87,6 @@ export function DraftOrderProvider({ children }: { children: React.ReactNode }) 
     [],
   );
 
-  const setPaymentMethod = useCallback((method: PaymentMethod) => {
-    setDraft((d) => ({ ...d, paymentMethod: method }));
-  }, []);
-
-  const setPaymentReceipt = useCallback((receipt: PaymentReceipt | null) => {
-    setDraft((d) => ({ ...d, paymentReceipt: receipt }));
-  }, []);
-
   const setScheduledAt = useCallback((iso: string | null) => {
     setDraft((d) => ({ ...d, scheduledAt: iso }));
   }, []);
@@ -130,8 +102,6 @@ export function DraftOrderProvider({ children }: { children: React.ReactNode }) 
       updateDropoff,
       setCategory,
       setPackage,
-      setPaymentMethod,
-      setPaymentReceipt,
       setScheduledAt,
       reset,
     }),
@@ -143,8 +113,6 @@ export function DraftOrderProvider({ children }: { children: React.ReactNode }) 
       updateDropoff,
       setCategory,
       setPackage,
-      setPaymentMethod,
-      setPaymentReceipt,
       setScheduledAt,
       reset,
     ],

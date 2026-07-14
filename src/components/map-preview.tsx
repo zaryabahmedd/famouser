@@ -5,7 +5,7 @@
 // map" button opens the full-screen picker for finer control.
 import { MaterialIcons } from '@expo/vector-icons';
 import { useEffect, useRef } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView, { PROVIDER_GOOGLE, type Region } from 'react-native-maps';
 
 export type MapPreviewProps = {
@@ -18,6 +18,11 @@ export type MapPreviewProps = {
   onCoordinateChange?: (lat: number, lng: number) => void;
   // Hide the "Move on map" fine-tune option until a location is resolved.
   showMoveButton?: boolean;
+  // When provided, shows a "Current location" button at the bottom of the map
+  // that lets the user jump to their GPS position.
+  onLocatePress?: () => void;
+  // True while the GPS fix is being acquired; disables the locate button.
+  locating?: boolean;
   // Zoom span (latitude/longitude delta); smaller = closer. Defaults to a
   // street-level view; pass a larger value for a city-level view.
   spanDelta?: number;
@@ -43,6 +48,8 @@ export function MapPreview({
   onMovePress,
   onCoordinateChange,
   showMoveButton = true,
+  onLocatePress,
+  locating = false,
   spanDelta = 0.01,
 }: MapPreviewProps) {
   const hasLocation = typeof lat === 'number' && typeof lng === 'number';
@@ -126,6 +133,26 @@ export function MapPreview({
         </View>
       ) : null}
 
+      {onLocatePress ? (
+        <Pressable
+          onPress={onLocatePress}
+          disabled={locating}
+          style={({ pressed }) => [
+            styles.mapBtn,
+            styles.locateBtn,
+            (pressed || locating) && styles.mapBtnPressed,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Use current location">
+          {locating ? (
+            <ActivityIndicator size={18} color="#1b1b1e" />
+          ) : (
+            <MaterialIcons name="gps-fixed" size={18} color="#1b1b1e" />
+          )}
+          <Text style={styles.mapBtnText}>{locating ? 'Locating…' : 'Current location'}</Text>
+        </Pressable>
+      ) : null}
+
       {showMoveButton ? (
         <Pressable
           onPress={onMovePress}
@@ -205,6 +232,10 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
+  },
+  locateBtn: {
+    right: undefined,
+    left: 12,
   },
   mapBtnPressed: {
     opacity: 0.85,

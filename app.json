@@ -31,7 +31,9 @@
         }
       },
       "permissions": [
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
       ]
     },
     "web": {
@@ -53,6 +55,12 @@
           "photosPermission": "Allow FAMO to access your photos so you can set a profile picture or upload a payment receipt.",
           "cameraPermission": false,
           "microphonePermission": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow FAMO to use your location so we can set your pickup address automatically."
         }
       ],
       [

@@ -8,7 +8,16 @@ import type { MapPreviewProps } from './map-preview';
 
 // react-native-maps is native-only, so the web preview stays a static placeholder
 // and ignores `onCoordinateChange`.
-export function MapPreview({ lat, lng, tint, kind, onMovePress, showMoveButton = true }: MapPreviewProps) {
+export function MapPreview({
+  lat,
+  lng,
+  tint,
+  kind,
+  onMovePress,
+  showMoveButton = true,
+  onLocatePress,
+  locating = false,
+}: MapPreviewProps) {
   const hasLocation = typeof lat === 'number' && typeof lng === 'number';
 
   return (
@@ -30,6 +39,22 @@ export function MapPreview({ lat, lng, tint, kind, onMovePress, showMoveButton =
           ? `${(lat as number).toFixed(4)}, ${(lng as number).toFixed(4)}`
           : 'Map preview is available on the mobile app'}
       </Text>
+
+      {onLocatePress ? (
+        <Pressable
+          onPress={onLocatePress}
+          disabled={locating}
+          style={({ pressed }) => [
+            styles.mapBtn,
+            styles.locateBtn,
+            (pressed || locating) && styles.mapBtnPressed,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Use current location">
+          <MaterialIcons name="gps-fixed" size={18} color="#1b1b1e" />
+          <Text style={styles.mapBtnText}>{locating ? 'Locating…' : 'Current location'}</Text>
+        </Pressable>
+      ) : null}
 
       {showMoveButton ? (
         <Pressable
@@ -94,6 +119,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
+  },
+  locateBtn: {
+    right: undefined,
+    left: 12,
   },
   mapBtnPressed: {
     opacity: 0.85,

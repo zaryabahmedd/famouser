@@ -1,11 +1,12 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import {
     Alert,
     Animated,
+    BackHandler,
     Easing,
     Platform,
     Pressable,
@@ -19,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGoBack } from '@/hooks/use-go-back';
 import { BottomNav } from '@/components/bottom-nav';
 import { useDeliveryStatus } from '@/hooks/use-delivery-status';
+import { supabase } from '@/lib/supabase';
 
 const COLORS = {
   surface: '#ffffff',
@@ -118,6 +120,57 @@ export function FindingRider() {
     const timer = setTimeout(() => router.replace('/rider-assigned'), 4000);
     return () => clearTimeout(timer);
   }, [deliveryId, router]);
+
+  // Backing out of this screen means abandoning the search, so intercept the
+  // Android hardware/gesture back and confirm before cancelling the ride.
+  // (There is no back arrow here, and the root layout uses a Slot — no iOS
+  // swipe-back — so the hardware back press is the only back path.)
+  const cancellingRef = useRef(false);
+  const cancelRideAndGoHome = useCallback(async () => {
+    if (cancellingRef.current) return;
+    cancellingRef.current = true;
+    try {
+      // Preview mode (no real delivery): nothing to cancel server-side.
+      if (deliveryId) {
+        const { error } = await supabase.rpc('user_cancel_delivery', {
+          p_delivery_id: deliveryId,
+        });
+        // Already-cancelled is fine (e.g. dispatch timed out meanwhile); any
+        // other failure keeps the user here so the search isn't silently lost.
+        if (error && !error.message?.includes('cannot_cancel_cancelled')) {
+          Alert.alert('Unable to cancel', 'We could not cancel your ride. Please try again.');
+          return;
+        }
+      }
+      router.dismissTo('/');
+    } finally {
+      cancellingRef.current = false;
+    }
+  }, [deliveryId, router]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'android') return;
+
+      const onBackPress = () => {
+        Alert.alert(
+          'Cancel ride?',
+          'Are you sure you want to cancel the ride?',
+          [
+            { text: 'No', style: 'cancel' },
+            { text: 'Yes', style: 'destructive', onPress: () => cancelRideAndGoHome() },
+          ],
+          { cancelable: true },
+        );
+        // Returning true suppresses the default back navigation so the dialog
+        // decides what happens instead.
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }, [cancelRideAndGoHome]),
+  );
 
   useEffect(() => {
     if (!delivery) return;

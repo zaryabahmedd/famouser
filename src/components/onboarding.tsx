@@ -1,3 +1,4 @@
+import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -182,7 +183,7 @@ export function Onboarding({ onDone }: OnboardingProps) {
           style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
           accessibilityRole="button"
           accessibilityLabel={isLast ? 'Get started' : 'Next'}>
-          <Text style={styles.fabIcon}>{'\u2192'}</Text>
+          <MaterialIcons name="arrow-forward" size={30} color={BG} />
         </Pressable>
       </View>
     </View>
@@ -286,11 +287,5 @@ const styles = StyleSheet.create({
   },
   fabPressed: {
     transform: [{ scale: 0.95 }],
-  },
-  fabIcon: {
-    color: BG,
-    fontSize: 32,
-    lineHeight: 34,
-    fontWeight: '700',
   },
 });

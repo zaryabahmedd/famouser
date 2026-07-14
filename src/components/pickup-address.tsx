@@ -6,6 +6,7 @@ import {
     ActivityIndicator,
     Alert,
     KeyboardAvoidingView,
+    Linking,
     Platform,
     Pressable,
     ScrollView,
@@ -62,14 +63,11 @@ export function PickupAddress() {
   // option so it only appears after the map has navigated to the address.
   const [addressResolved, setAddressResolved] = useState(!!pickup);
 
-  // Every field is required — address, sender name, a real phone number, and
-  // pickup instructions — so incomplete or bogus orders can't be submitted.
+  // Address, sender name, and a real phone number are required so incomplete
+  // or bogus orders can't be submitted. Pickup instructions are optional.
   const phoneValid = phone.replace(/\D/g, '').length >= 10;
   const isComplete =
-    citySearch.query.trim().length > 0 &&
-    name.trim().length > 0 &&
-    phoneValid &&
-    notes.trim().length > 0;
+    citySearch.query.trim().length > 0 && name.trim().length > 0 && phoneValid;
 
   const openMapPicker = () => {
     router.push({
@@ -136,6 +134,108 @@ export function PickupAddress() {
   }, [citySearch.query]);
 
   const [resolving, setResolving] = useState(false);
+  const [locating, setLocating] = useState(false);
+
+  // "Current location" button: get a GPS fix, move the map there, and set it as
+  // the pickup address (reverse-geocoded to something readable when possible).
+  // expo-location is loaded lazily so this screen still works on app builds
+  // that don't include the native module yet (it would otherwise crash the
+  // whole route at import time and expo-router would show "Unmatched Route").
+  const handleUseCurrentLocation = async () => {
+    if (locating) return;
+    let Location: typeof import('expo-location');
+    try {
+      Location = require('expo-location');
+    } catch {
+      Alert.alert(
+        'Update required',
+        'This feature needs the latest version of the app. Please update or rebuild the app, or type the address instead.',
+      );
+      return;
+    }
+    setLocating(true);
+    try {
+      const { status, canAskAgain } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Location access needed',
+          'FAMO needs your location to set the pickup address automatically. You can still type the address or set it on the map.',
+          canAskAgain
+            ? undefined
+            : [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Open settings', onPress: () => Linking.openSettings() },
+              ],
+        );
+        return;
+      }
+
+      // Getting a fresh high-accuracy fix can hang for a long time or throw
+      // outright indoors / when there is no recent GPS lock. So: try a recent
+      // cached fix first (instant), then fall back to a live fetch that is
+      // capped with our own timeout and uses Balanced accuracy, which the OS
+      // can satisfy from Wi-Fi/cell without waiting on a pure-GPS lock.
+      const withTimeout = <T,>(p: Promise<T>, ms: number): Promise<T> =>
+        Promise.race([
+          p,
+          new Promise<T>((_, reject) =>
+            setTimeout(() => reject(new Error('location-timeout')), ms),
+          ),
+        ]);
+
+      let pos = await Location.getLastKnownPositionAsync({ maxAge: 60_000 });
+      if (!pos) {
+        try {
+          pos = await withTimeout(
+            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+            12_000,
+          );
+        } catch {
+          // Last resort: accept any cached fix regardless of age before giving up.
+          pos = await Location.getLastKnownPositionAsync();
+        }
+      }
+      if (!pos) {
+        throw new Error('no-location');
+      }
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+
+      // Best-effort readable address; fall back to raw coordinates.
+      let address = `Current location (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+      try {
+        const [place] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+        if (place) {
+          const composed =
+            place.formattedAddress ||
+            [place.name, place.street, place.city, place.region]
+              .filter((part, i, arr) => part && part !== arr[i - 1])
+              .join(', ');
+          if (composed) address = composed;
+        }
+      } catch {
+        // Reverse geocoding is best-effort; keep the coordinate fallback.
+      }
+
+      // Keep the debounced auto-geocode from re-resolving this text and
+      // overwriting the precise GPS coordinates.
+      lastCityGeocode.current = address.trim();
+      citySearch.setQuery(address);
+      citySearch.clear();
+
+      setPickup({ address, lat, lng });
+      setMapCenter({ lat, lng });
+      setMapSpan(0.01);
+      setAddressResolved(true);
+    } catch {
+      Alert.alert(
+        'Could not get your location',
+        'Make sure location (GPS) is turned on, then try again — or type the address instead.',
+      );
+    } finally {
+      setLocating(false);
+    }
+  };
 
   const handleContinue = async () => {
     if (!isComplete) {
@@ -143,7 +243,7 @@ export function PickupAddress() {
         'Missing information',
         phone.trim().length > 0 && !phoneValid
           ? 'Enter a valid phone number (at least 10 digits).'
-          : 'Please fill in all the fields above before continuing.',
+          : 'Please fill in the address, sender name, and phone number before continuing.',
       );
       return;
     }
@@ -246,6 +346,8 @@ export function PickupAddress() {
           onMovePress={openMapPicker}
           onCoordinateChange={handlePinMove}
           showMoveButton={!!mapCenter}
+          onLocatePress={handleUseCurrentLocation}
+          locating={locating}
           spanDelta={mapSpan}
         />
 
@@ -329,7 +431,7 @@ export function PickupAddress() {
         </View>
 
         {/* Notes */}
-        <Text style={styles.sectionTitle}>Pickup instructions</Text>
+        <Text style={styles.sectionTitle}>Pickup instructions (optional)</Text>
         <View style={[styles.field, styles.fieldNote]} onLayout={registerField('notes')}>
           <TextInput
             value={notes}

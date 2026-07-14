@@ -62,15 +62,11 @@ export function DropoffAddress() {
   // option so it only appears after the map has navigated to the address.
   const [addressResolved, setAddressResolved] = useState(!!dropoff);
 
-  // Every field is required — address, recipient name, a real phone number,
-  // and drop-off instructions — so incomplete or bogus orders can't be
-  // submitted.
+  // Address, recipient name, and a real phone number are required so incomplete
+  // or bogus orders can't be submitted. Delivery instructions are optional.
   const phoneValid = phone.replace(/\D/g, '').length >= 10;
   const isComplete =
-    citySearch.query.trim().length > 0 &&
-    name.trim().length > 0 &&
-    phoneValid &&
-    notes.trim().length > 0;
+    citySearch.query.trim().length > 0 && name.trim().length > 0 && phoneValid;
   const [resolving, setResolving] = useState(false);
 
   const openMapPicker = () => {
@@ -143,7 +139,7 @@ export function DropoffAddress() {
         'Missing information',
         phone.trim().length > 0 && !phoneValid
           ? 'Enter a valid phone number (at least 10 digits).'
-          : 'Please fill in all the fields above before continuing.',
+          : 'Please fill in the address, recipient name, and phone number before continuing.',
       );
       return;
     }
@@ -327,7 +323,7 @@ export function DropoffAddress() {
         </View>
 
         {/* Notes */}
-        <Text style={styles.sectionTitle}>Delivery instructions</Text>
+        <Text style={styles.sectionTitle}>Delivery instructions (optional)</Text>
         <View style={[styles.field, styles.fieldNote]} onLayout={registerField('notes')}>
           <TextInput
             value={notes}

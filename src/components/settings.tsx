@@ -116,7 +116,7 @@ export function Settings() {
           accessibilityLabel="Go back">
           <MaterialIcons name="arrow-back" size={24} color={COLORS.onSurface} />
         </Pressable>
-        <Text style={styles.headerTitle}>Settings</Text>
+        <Text style={styles.headerTitle}>Settings </Text>
         <View style={styles.iconButton} />
       </View>
 
